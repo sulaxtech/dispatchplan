@@ -12,16 +12,19 @@
       padding:10px 20px; background:#111827; font-size:20px;
     }
 
+    /* KPI */
     .tiles {
       display:grid; grid-template-columns:repeat(4,1fr);
       gap:10px; padding:10px;
     }
 
-    .tile { padding:20px; border-radius:10px; text-align:center; }
-    .blue{background:#1e3a8a;}
-    .green{background:#065f46;}
-    .orange{background:#92400e;}
-    .red{background:#7f1d1d;}
+    .tile {
+      padding:20px;
+      border-radius:12px;
+      text-align:center;
+      background:linear-gradient(135deg,#1f2937,#111827);
+      box-shadow:0 4px 10px rgba(0,0,0,0.5);
+    }
 
     .controls { text-align:center; padding:10px; }
 
@@ -50,22 +53,25 @@
 
     @keyframes blink { 50% { opacity:0.4; } }
 
-    /* 📊 CHART LAYOUT */
+    /* Charts */
     .chart-row {
       display:flex;
       gap:20px;
-      align-items:center;
     }
 
     .chart-box {
       flex:1;
-      height:180px;
+      height:200px;
+      background:#111827;
+      padding:10px;
+      border-radius:12px;
     }
 
     canvas {
       width:100% !important;
       height:100% !important;
     }
+
   </style>
 </head>
 
@@ -77,10 +83,10 @@
 </div>
 
 <div class="tiles">
-  <div class="tile blue" id="sch"></div>
-  <div class="tile green" id="disp"></div>
-  <div class="tile orange" id="pending"></div>
-  <div class="tile red" id="ach"></div>
+  <div class="tile" id="sch"></div>
+  <div class="tile" id="disp"></div>
+  <div class="tile" id="pending"></div>
+  <div class="tile" id="ach"></div>
 </div>
 
 <div class="controls">
@@ -102,7 +108,7 @@ let data=[], filtered=[], headers=[];
 let pages=[], current=0, timer;
 let trendChart, barChart;
 
-// CSV parser
+/* CSV */
 function parseCSV(text){
   const rows=[]; let row=[],val='',q=false;
   for(let c of text){
@@ -122,14 +128,14 @@ function parseCSV(text){
   });
 }
 
-// Date format
+/* DATE */
 function formatDate(d){
   let date=new Date(d);
   if(isNaN(date)) return (d||"").replace(/-/g,'/');
   return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
 }
 
-// Load
+/* LOAD */
 function load(){
   fetch(url).then(r=>r.text()).then(t=>{
     data=parseCSV(t);
@@ -137,13 +143,12 @@ function load(){
   });
 }
 
-// Date filter
+/* FILTER */
 function applyDateFilter(){
   let val=document.getElementById("datePicker").value;
 
-  if(!val){
-    filtered=data;
-  }else{
+  if(!val) filtered=data;
+  else{
     let sel=formatDate(val);
     filtered=data.filter(r=>formatDate(r["SCHEDULE DATE"])===sel);
   }
@@ -151,7 +156,7 @@ function applyDateFilter(){
   build();
 }
 
-// Build
+/* BUILD */
 function build(){
   document.getElementById("pages").innerHTML="";
   pages=[];
@@ -163,7 +168,7 @@ function build(){
   show(0);
 }
 
-// KPI
+/* KPI */
 function updateTiles(){
   let sch=0,disp=0;
 
@@ -179,7 +184,7 @@ function updateTiles(){
     "Ach %: "+(sch?((disp/sch)*100).toFixed(1):0)+"%";
 }
 
-// Customer slides
+/* SLIDES */
 function createSlides(){
   let group={};
 
@@ -198,7 +203,7 @@ function createSlides(){
   }
 }
 
-// Table
+/* TABLE */
 function table(rows){
   let html="<table><tr>";
   headers.forEach(h=>html+=`<th>${h}</th>`);
@@ -214,14 +219,14 @@ function table(rows){
   return html+"</table>";
 }
 
-// 📊 FINAL SLIDE (TREND + BAR)
+/* PREMIUM CHART */
 function createChartSlide(){
 
   let div=document.createElement("div");
   div.className="page";
 
   div.innerHTML=`
-    <h2>📊 Overall Analysis</h2>
+    <h2 style="text-align:center;">📊 Overall Analysis</h2>
     <div class="chart-row">
       <div class="chart-box"><canvas id="trendChart"></canvas></div>
       <div class="chart-box"><canvas id="barChart"></canvas></div>
@@ -231,7 +236,7 @@ function createChartSlide(){
   pages.push(div);
   document.getElementById("pages").appendChild(div);
 
-  // TREND DATA
+  /* TREND */
   let trend={};
   data.forEach(r=>{
     let d=formatDate(r["SCHEDULE DATE"]);
@@ -242,42 +247,67 @@ function createChartSlide(){
   let labels=Object.keys(trend).sort((a,b)=>a-b);
   let values=labels.map(d=>trend[d]);
 
+  let ctx1=document.getElementById("trendChart").getContext("2d");
+  let gradient=ctx1.createLinearGradient(0,0,0,200);
+  gradient.addColorStop(0,"rgba(34,197,94,0.7)");
+  gradient.addColorStop(1,"rgba(34,197,94,0)");
+
   if(trendChart) trendChart.destroy();
-  trendChart=new Chart(document.getElementById("trendChart"),{
+
+  trendChart=new Chart(ctx1,{
     type:'line',
-    data:{labels:labels,datasets:[{data:values,tension:0.3}]},
+    data:{
+      labels:labels,
+      datasets:[{
+        data:values,
+        borderColor:"#22c55e",
+        backgroundColor:gradient,
+        fill:true,
+        tension:0.4
+      }]
+    },
     options:{plugins:{legend:{display:false}}}
   });
 
-  // BAR DATA (customer wise)
+  /* BAR */
   let grp={};
   data.forEach(r=>{
     let c=r["CUSTOMER"];
     grp[c]=(grp[c]||0)+(+r["DISP QTY"]||0);
   });
 
+  let ctx2=document.getElementById("barChart").getContext("2d");
+  let barGradient=ctx2.createLinearGradient(0,0,0,200);
+  barGradient.addColorStop(0,"#3b82f6");
+  barGradient.addColorStop(1,"#1e3a8a");
+
   if(barChart) barChart.destroy();
-  barChart=new Chart(document.getElementById("barChart"),{
+
+  barChart=new Chart(ctx2,{
     type:'bar',
     data:{
       labels:Object.keys(grp),
-      datasets:[{data:Object.values(grp)}]
+      datasets:[{
+        data:Object.values(grp),
+        backgroundColor:barGradient,
+        borderRadius:8
+      }]
     },
     options:{plugins:{legend:{display:false}}}
   });
 }
 
-// Controls
+/* CONTROLS */
 function show(i){pages.forEach(p=>p.classList.remove("active")); if(pages[i]) pages[i].classList.add("active");}
 function nextSlide(){current=(current+1)%pages.length;show(current);}
 function prevSlide(){current=(current-1+pages.length)%pages.length;show(current);}
 function playSlide(){clearInterval(timer);timer=setInterval(nextSlide,4000);}
 function pauseSlide(){clearInterval(timer);}
 
-// Clock
+/* CLOCK */
 setInterval(()=>{document.getElementById("clock").innerText=new Date().toLocaleString();},1000);
 
-// Start
+/* START */
 load();
 playSlide();
 
