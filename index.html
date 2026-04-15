@@ -18,25 +18,6 @@
       background: #111827;
     }
 
-    .tiles {
-      display: flex;
-      gap: 10px;
-      padding: 10px;
-    }
-
-    .tile {
-      flex: 1;
-      padding: 15px;
-      border-radius: 8px;
-      text-align: center;
-      font-weight: bold;
-    }
-
-    .blue { background: #1e3a8a; }
-    .green { background: #065f46; }
-    .orange { background: #92400e; }
-    .red { background: #7f1d1d; }
-
     .controls {
       text-align: center;
       padding: 10px;
@@ -65,12 +46,17 @@
       width: 100%;
       border-collapse: collapse;
       margin-top: 10px;
+      font-size: 14px;
     }
 
     th, td {
       border: 1px solid #374151;
-      padding: 8px;
+      padding: 6px;
       text-align: center;
+    }
+
+    th {
+      background: #1f2937;
     }
 
     .ok { background: #065f46; }
@@ -89,13 +75,6 @@
   <div id="clock"></div>
 </div>
 
-<div class="tiles">
-  <div class="tile blue" id="sch">Scheduled: 0</div>
-  <div class="tile green" id="disp">Dispatched: 0</div>
-  <div class="tile orange" id="pending">Pending: 0</div>
-  <div class="tile red" id="ach">Ach %: 0%</div>
-</div>
-
 <div class="controls">
   <button onclick="prevSlide()">⏮ Prev</button>
   <button onclick="pauseSlide()">⏸ Pause</button>
@@ -110,19 +89,46 @@
 const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JFJP5dxHBSQ8-4m45W47nxwwLUBDs1INcHO6jswUCnk3kp57AP3tQq19qccF/pub?output=csv";
 
 let data = [];
+let headers = [];
 let pages = [];
 let current = 0;
 let timer;
 
-// SIMPLE CSV PARSER (SAFE)
+// ✅ FULL CSV PARSER (handles commas inside values)
 function parseCSV(text) {
-  let lines = text.trim().split("\n");
-  let headers = lines[0].split(",").map(h => h.trim().toUpperCase());
+  const rows = [];
+  let row = [];
+  let value = '';
+  let insideQuotes = false;
 
-  return lines.slice(1).map(line => {
-    let values = line.split(",");
+  for (let i = 0; i < text.length; i++) {
+    let char = text[i];
+
+    if (char === '"') {
+      insideQuotes = !insideQuotes;
+    } else if (char === ',' && !insideQuotes) {
+      row.push(value);
+      value = '';
+    } else if (char === '\n' && !insideQuotes) {
+      row.push(value);
+      rows.push(row);
+      row = [];
+      value = '';
+    } else {
+      value += char;
+    }
+  }
+
+  if (value) row.push(value);
+  if (row.length) rows.push(row);
+
+  headers = rows[0].map(h => h.trim());
+
+  return rows.slice(1).map(r => {
     let obj = {};
-    headers.forEach((h, i) => obj[h] = values[i]?.trim());
+    headers.forEach((h, i) => {
+      obj[h] = (r[i] || '').trim();
+    });
     return obj;
   });
 }
@@ -132,46 +138,23 @@ fetch(url)
 .then(r => r.text())
 .then(t => {
   data = parseCSV(t);
-  console.log(data);
   init();
-})
-.catch(e => {
-  document.body.innerHTML += "<h2 style='color:red'>Error loading data</h2>";
 });
 
 // INIT
 function init() {
-
   if (!data.length) {
-    document.body.innerHTML += "<h2 style='color:red'>No Data Found</h2>";
+    document.body.innerHTML += "<h2>No Data Found</h2>";
     return;
   }
 
-  updateTiles();
   createSlides();
   show(0);
   playSlide();
 }
 
-// KPI
-function updateTiles() {
-  let sch = 0, disp = 0;
-
-  data.forEach(r => {
-    sch += Number(r["SCH QTY"] || 0);
-    disp += Number(r["DISP QTY"] || 0);
-  });
-
-  document.getElementById("sch").innerText = "Scheduled: " + sch;
-  document.getElementById("disp").innerText = "Dispatched: " + disp;
-  document.getElementById("pending").innerText = "Pending: " + (sch - disp);
-  document.getElementById("ach").innerText =
-    "Ach %: " + (sch ? ((disp/sch)*100).toFixed(1) : 0) + "%";
-}
-
 // GROUP BY CUSTOMER
 function createSlides() {
-
   let group = {};
 
   data.forEach(r => {
@@ -184,40 +167,38 @@ function createSlides() {
     let div = document.createElement("div");
     div.className = "page";
 
-    div.innerHTML = `<h2>${c}</h2>` + table(group[c]);
+    div.innerHTML = `<h2>${c}</h2>` + createTable(group[c]);
 
     document.getElementById("pages").appendChild(div);
     pages.push(div);
   }
 }
 
-// TABLE
-function table(rows) {
-  let html = `<table>
-    <tr>
-      <th>SI NO</th>
-      <th>ITEM</th>
-      <th>MANAGER</th>
-      <th>SCH</th>
-      <th>DISP</th>
-      <th>REMARKS</th>
-    </tr>`;
+// ✅ DYNAMIC TABLE (ALL COLUMNS)
+function createTable(rows) {
+  let html = "<table><tr>";
 
-  rows.forEach(r => {
-    let cls = (r["REMARKS"] || "").toLowerCase().includes("ready")
-      ? "ok" : "bad";
-
-    html += `<tr class="${cls}">
-      <td>${r["SI NO"] || "-"}</td>
-      <td>${r["ITEM NAME"] || "-"}</td>
-      <td>${r["PROJECT PROGRAM MANAGER"] || "-"}</td>
-      <td>${r["SCH QTY"] || 0}</td>
-      <td>${r["DISP QTY"] || 0}</td>
-      <td>${r["REMARKS"] || "-"}</td>
-    </tr>`;
+  headers.forEach(h => {
+    html += `<th>${h}</th>`;
   });
 
-  return html + "</table>";
+  html += "</tr>";
+
+  rows.forEach(r => {
+    let remark = (r["REMARKS"] || "").toLowerCase();
+    let cls = remark.includes("ready") ? "ok" : "bad";
+
+    html += `<tr class="${cls}">`;
+
+    headers.forEach(h => {
+      html += `<td>${r[h] || "-"}</td>`;
+    });
+
+    html += "</tr>";
+  });
+
+  html += "</table>";
+  return html;
 }
 
 // SLIDES
