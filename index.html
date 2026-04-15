@@ -12,7 +12,6 @@
       padding:10px 20px; background:#111827; font-size:20px;
     }
 
-    /* KPI */
     .tiles {
       display:grid; grid-template-columns:repeat(4,1fr);
       gap:10px; padding:10px;
@@ -61,7 +60,7 @@
 
     .chart-box {
       flex:1;
-      height:200px;
+      height:220px;
       background:#111827;
       padding:10px;
       border-radius:12px;
@@ -70,6 +69,7 @@
     canvas {
       width:100% !important;
       height:100% !important;
+      image-rendering: crisp-edges;
     }
 
   </style>
@@ -94,13 +94,15 @@
   <button onclick="pauseSlide()">⏸</button>
   <button onclick="playSlide()">▶</button>
   <button onclick="nextSlide()">⏭</button>
-
   📅 <input type="date" id="datePicker" onchange="applyDateFilter()">
 </div>
 
 <div id="pages"></div>
 
 <script>
+
+/* 🔥 FIX BLUR */
+Chart.defaults.devicePixelRatio = window.devicePixelRatio || 2;
 
 const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JFJP5dxHBSQ8-4m45W47nxwwLUBDs1INcHO6jswUCnk3kp57AP3tQq19qccF/pub?output=csv";
 
@@ -219,7 +221,7 @@ function table(rows){
   return html+"</table>";
 }
 
-/* PREMIUM CHART */
+/* ⭐ PREMIUM CHART */
 function createChartSlide(){
 
   let div=document.createElement("div");
@@ -247,53 +249,60 @@ function createChartSlide(){
   let labels=Object.keys(trend).sort((a,b)=>a-b);
   let values=labels.map(d=>trend[d]);
 
-  let ctx1=document.getElementById("trendChart").getContext("2d");
-  let gradient=ctx1.createLinearGradient(0,0,0,200);
-  gradient.addColorStop(0,"rgba(34,197,94,0.7)");
-  gradient.addColorStop(1,"rgba(34,197,94,0)");
-
   if(trendChart) trendChart.destroy();
 
-  trendChart=new Chart(ctx1,{
+  trendChart=new Chart(document.getElementById("trendChart"),{
     type:'line',
     data:{
       labels:labels,
       datasets:[{
         data:values,
         borderColor:"#22c55e",
-        backgroundColor:gradient,
+        backgroundColor:"rgba(34,197,94,0.2)",
         fill:true,
-        tension:0.4
+        tension:0.4,
+        pointRadius:4
       }]
     },
-    options:{plugins:{legend:{display:false}}}
+    options:{
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:"white"}},
+        y:{ticks:{color:"white"}}
+      }
+    }
   });
 
   /* BAR */
-  let grp={};
+  let grp={}, target={};
+
   data.forEach(r=>{
     let c=r["CUSTOMER"];
     grp[c]=(grp[c]||0)+(+r["DISP QTY"]||0);
+    target[c]=(target[c]||0)+(+r["SCH QTY"]||0);
   });
 
-  let ctx2=document.getElementById("barChart").getContext("2d");
-  let barGradient=ctx2.createLinearGradient(0,0,0,200);
-  barGradient.addColorStop(0,"#3b82f6");
-  barGradient.addColorStop(1,"#1e3a8a");
+  let customers=Object.keys(grp);
 
   if(barChart) barChart.destroy();
 
-  barChart=new Chart(ctx2,{
+  barChart=new Chart(document.getElementById("barChart"),{
     type:'bar',
     data:{
-      labels:Object.keys(grp),
+      labels:customers,
       datasets:[{
-        data:Object.values(grp),
-        backgroundColor:barGradient,
-        borderRadius:8
+        data:customers.map(c=>grp[c]),
+        backgroundColor:customers.map(c=>grp[c]>=target[c]?"#22c55e":"#ef4444"),
+        borderRadius:10
       }]
     },
-    options:{plugins:{legend:{display:false}}}
+    options:{
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:"white"}},
+        y:{ticks:{color:"white"}}
+      }
+    }
   });
 }
 
