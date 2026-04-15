@@ -100,7 +100,7 @@
 /* FIX BLUR */
 Chart.defaults.devicePixelRatio = window.devicePixelRatio || 2;
 
-/* % LABEL PLUGIN */
+/* % LABEL */
 const valueLabelPlugin = {
   id: 'valueLabel',
   afterDatasetsDraw(chart) {
@@ -129,7 +129,7 @@ const valueLabelPlugin = {
   }
 };
 
-const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JFJP5dxHBSQ8-4m45W47nxwwLUBDs1INcHO6jswUCnk3kp57AP3tQq19qccF/pub?output=csv";
+const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JFJP5dxHBSQ8-4m45W47nxwwLUBDs1INcHO6jswUCnk3kp57AP3tQq19qccF/pub?output=csv&v="+new Date().getTime();
 
 let data=[], filtered=[], headers=[];
 let pages=[], current=0, timer;
@@ -160,7 +160,7 @@ function load(){
   });
 }
 
-/* FILTER */
+/* FILTER FIX */
 function applyDateFilter(){
   let val=document.getElementById("datePicker").value;
 
@@ -170,10 +170,12 @@ function applyDateFilter(){
     filtered=data.filter(r=>formatDate(r["SCHEDULE DATE"])===sel);
   }
 
+  current = 0;
   build();
+  playSlide(); // 🔥 restart slideshow
 }
 
-/* BUILD */
+/* BUILD FIX */
 function build(){
   document.getElementById("pages").innerHTML="";
   pages=[];
@@ -182,7 +184,8 @@ function build(){
   createSlides();
   createChartSlide();
 
-  show(0);
+  current = 0;
+  show(current);
 }
 
 /* KPI */
@@ -315,14 +318,35 @@ function createChartSlide(){
 }
 
 /* CONTROLS */
-function show(i){pages.forEach(p=>p.classList.remove("active")); if(pages[i]) pages[i].classList.add("active");}
-function nextSlide(){current=(current+1)%pages.length;show(current);}
-function prevSlide(){current=(current-1+pages.length)%pages.length;show(current);}
-function playSlide(){clearInterval(timer);timer=setInterval(nextSlide,8000);}
-function pauseSlide(){clearInterval(timer);}
+function show(i){
+  pages.forEach(p=>p.classList.remove("active"));
+  if(pages[i]) pages[i].classList.add("active");
+}
+
+function nextSlide(){
+  if(pages.length === 0) return;
+  current=(current+1)%pages.length;
+  show(current);
+}
+
+function prevSlide(){
+  current=(current-1+pages.length)%pages.length;
+  show(current);
+}
+
+function playSlide(){
+  clearInterval(timer);
+  timer=setInterval(nextSlide,10000); // ⏱ 10 sec
+}
+
+function pauseSlide(){
+  clearInterval(timer);
+}
 
 /* CLOCK */
-setInterval(()=>{document.getElementById("clock").innerText=new Date().toLocaleString();},1000);
+setInterval(()=>{
+  document.getElementById("clock").innerText=new Date().toLocaleString();
+},1000);
 
 /* START */
 load();
