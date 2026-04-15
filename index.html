@@ -37,6 +37,21 @@
     .orange { background: #92400e; }
     .red { background: #7f1d1d; }
 
+    .controls {
+      text-align: center;
+      padding: 10px;
+    }
+
+    .controls button {
+      padding: 8px 15px;
+      margin: 5px;
+      border: none;
+      border-radius: 5px;
+      background: #2563eb;
+      color: white;
+      cursor: pointer;
+    }
+
     .page {
       display: none;
       padding: 20px;
@@ -81,6 +96,13 @@
   <div class="tile red" id="ach">Ach %: 0%</div>
 </div>
 
+<div class="controls">
+  <button onclick="prevSlide()">⏮ Previous</button>
+  <button onclick="pauseSlide()">⏸ Pause</button>
+  <button onclick="playSlide()">▶ Play</button>
+  <button onclick="nextSlide()">⏭ Next</button>
+</div>
+
 <div id="pages"></div>
 
 <script>
@@ -90,28 +112,23 @@ const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLl
 let data = [];
 let pages = [];
 let currentPage = 0;
+let slideInterval;
 
-// ✅ SUPER STRONG CSV PARSER
-function cleanKey(key) {
-  return key.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
-}
-
+// CSV PARSER
 function parseCSV(text) {
   const rows = text.trim().split("\n").map(r =>
     r.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
   );
 
-  const rawHeaders = rows[0];
-
-  const headers = rawHeaders.map(h => cleanKey(h));
+  const headers = rows[0].map(h =>
+    h.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()
+  );
 
   return rows.slice(1).map(r => {
     let obj = {};
-
     headers.forEach((h, i) => {
       obj[h] = r[i]?.replace(/"/g, '').trim();
     });
-
     return obj;
   });
 }
@@ -121,21 +138,17 @@ fetch(sheetURL)
   .then(res => res.text())
   .then(csv => {
     data = parseCSV(csv);
-    console.log("DATA:", data);
     init();
   });
 
 // INIT
 function init() {
-
-  if (!data.length) {
-    document.body.innerHTML += "<h2 style='color:red;text-align:center'>No Data Found</h2>";
-    return;
-  }
+  data = data.filter(r => r["CUSTOMER"]);
 
   updateTiles();
   createSlides();
-  startSlideshow();
+  showSlide(0);
+  playSlide();
 }
 
 // KPI
@@ -156,20 +169,18 @@ function updateTiles() {
   document.getElementById("ach").innerText = "Ach %: " + ach + "%";
 }
 
-// SLIDES
+// GROUP
 function createSlides() {
-
   let grouped = {};
 
   data.forEach(r => {
-    let c = r["CUSTOMER"] || "Unknown";
+    let c = r["CUSTOMER"];
 
     if (!grouped[c]) grouped[c] = [];
     grouped[c].push(r);
   });
 
   Object.keys(grouped).forEach(c => {
-
     let div = document.createElement("div");
     div.className = "page";
 
@@ -213,17 +224,29 @@ function createTable(rows) {
   return html;
 }
 
-// SLIDESHOW
-function startSlideshow() {
-  setInterval(() => {
-    pages.forEach(p => p.classList.remove("active"));
+// SLIDES CONTROL
+function showSlide(index) {
+  pages.forEach(p => p.classList.remove("active"));
+  if (pages[index]) pages[index].classList.add("active");
+}
 
-    if (pages.length) {
-      pages[currentPage].classList.add("active");
-      currentPage = (currentPage + 1) % pages.length;
-    }
+function nextSlide() {
+  currentPage = (currentPage + 1) % pages.length;
+  showSlide(currentPage);
+}
 
-  }, 4000);
+function prevSlide() {
+  currentPage = (currentPage - 1 + pages.length) % pages.length;
+  showSlide(currentPage);
+}
+
+function playSlide() {
+  clearInterval(slideInterval);
+  slideInterval = setInterval(nextSlide, 4000);
+}
+
+function pauseSlide() {
+  clearInterval(slideInterval);
 }
 
 // CLOCK
