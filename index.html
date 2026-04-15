@@ -91,21 +91,27 @@ let data = [];
 let pages = [];
 let currentPage = 0;
 
-// ✅ FIXED CSV PARSER (AUTO CLEAN HEADERS)
+// ✅ SUPER STRONG CSV PARSER
+function cleanKey(key) {
+  return key.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+}
+
 function parseCSV(text) {
   const rows = text.trim().split("\n").map(r =>
     r.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
   );
 
-  const headers = rows[0].map(h =>
-    h.replace(/"/g, '').trim().toUpperCase()
-  );
+  const rawHeaders = rows[0];
+
+  const headers = rawHeaders.map(h => cleanKey(h));
 
   return rows.slice(1).map(r => {
     let obj = {};
+
     headers.forEach((h, i) => {
       obj[h] = r[i]?.replace(/"/g, '').trim();
     });
+
     return obj;
   });
 }
@@ -117,14 +123,10 @@ fetch(sheetURL)
     data = parseCSV(csv);
     console.log("DATA:", data);
     init();
-  })
-  .catch(err => console.error(err));
+  });
 
 // INIT
 function init() {
-
-  // remove empty rows
-  data = data.filter(r => r["CUSTOMER"]);
 
   if (!data.length) {
     document.body.innerHTML += "<h2 style='color:red;text-align:center'>No Data Found</h2>";
@@ -141,8 +143,8 @@ function updateTiles() {
   let sch = 0, disp = 0;
 
   data.forEach(r => {
-    sch += Number(r["SCH QTY"] || 0);
-    disp += Number(r["DISP QTY"] || 0);
+    sch += Number(r["SCHQTY"] || 0);
+    disp += Number(r["DISPQTY"] || 0);
   });
 
   let pending = sch - disp;
@@ -154,13 +156,13 @@ function updateTiles() {
   document.getElementById("ach").innerText = "Ach %: " + ach + "%";
 }
 
-// GROUP + SLIDES
+// SLIDES
 function createSlides() {
 
   let grouped = {};
 
   data.forEach(r => {
-    let c = r["CUSTOMER"].trim();
+    let c = r["CUSTOMER"] || "Unknown";
 
     if (!grouped[c]) grouped[c] = [];
     grouped[c].push(r);
@@ -198,11 +200,11 @@ function createTable(rows) {
       : "bad";
 
     html += `<tr class="${cls}">
-      <td>${r["SI NO"] || "-"}</td>
-      <td>${r["ITEM NAME"] || "-"}</td>
-      <td>${r["PROJECT PROGRAM MANAGER"] || "-"}</td>
-      <td>${r["SCH QTY"] || 0}</td>
-      <td>${r["DISP QTY"] || 0}</td>
+      <td>${r["SINO"] || "-"}</td>
+      <td>${r["ITEMNAME"] || "-"}</td>
+      <td>${r["PROJECTPROGRAMMANAGER"] || "-"}</td>
+      <td>${r["SCHQTY"] || 0}</td>
+      <td>${r["DISPQTY"] || 0}</td>
       <td>${r["REMARKS"] || "-"}</td>
     </tr>`;
   });
