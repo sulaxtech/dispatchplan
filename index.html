@@ -1,7 +1,8 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Dispatch PRO Dashboard</title>
+  <title>AI Dispatch Dashboard</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
     body {
@@ -31,7 +32,6 @@
       padding: 20px;
       border-radius: 10px;
       text-align: center;
-      font-size: 18px;
     }
 
     .blue { background: #1e3a8a; }
@@ -45,19 +45,24 @@
     }
 
     .controls button {
-      padding: 10px 18px;
+      padding: 10px;
       margin: 5px;
       border: none;
       border-radius: 6px;
       background: #2563eb;
       color: white;
       cursor: pointer;
-      font-size: 14px;
+    }
+
+    #aiPanel {
+      background: #111827;
+      margin: 10px;
+      padding: 10px;
     }
 
     .page {
       display: none;
-      padding: 20px;
+      padding: 15px;
     }
 
     .active {
@@ -67,7 +72,7 @@
     table {
       width: 100%;
       border-collapse: collapse;
-      font-size: 14px;
+      font-size: 13px;
     }
 
     th, td {
@@ -79,10 +84,18 @@
     th { background: #1f2937; }
 
     .ok { background: #065f46; }
-    .bad { background: #7f1d1d; }
+    .bad {
+      background: #7f1d1d;
+      animation: blink 1s infinite;
+    }
 
-    h2 {
-      text-align: center;
+    @keyframes blink {
+      50% { opacity: 0.4; }
+    }
+
+    canvas {
+      width: 100% !important;
+      height: 300px !important;
     }
   </style>
 </head>
@@ -90,7 +103,7 @@
 <body>
 
 <div class="header">
-  <div>📊 DISPATCH PRO DASHBOARD</div>
+  <div>🤖 AI DISPATCH DASHBOARD</div>
   <div id="clock"></div>
 </div>
 
@@ -102,127 +115,126 @@
 </div>
 
 <div class="controls">
-  <button onclick="prevSlide()">⏮ Prev</button>
-  <button onclick="pauseSlide()">⏸ Pause</button>
-  <button onclick="playSlide()">▶ Play</button>
-  <button onclick="nextSlide()">⏭ Next</button>
-  <button onclick="toggleToday()">📅 Today</button>
+  <button onclick="prevSlide()">⏮</button>
+  <button onclick="pauseSlide()">⏸</button>
+  <button onclick="playSlide()">▶</button>
+  <button onclick="nextSlide()">⏭</button>
+  <button onclick="toggleToday()">📅</button>
+</div>
+
+<div id="aiPanel">
+  <h3>🤖 AI Insights</h3>
+  <div id="insights"></div>
 </div>
 
 <div id="pages"></div>
+
+<canvas id="chart"></canvas>
 
 <script>
 
 const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JFJP5dxHBSQ8-4m45W47nxwwLUBDs1INcHO6jswUCnk3kp57AP3tQq19qccF/pub?output=csv";
 
-let data = [];
-let filteredData = [];
-let headers = [];
-let pages = [];
-let current = 0;
-let timer;
-let todayMode = false;
+let data=[], filtered=[], headers=[];
+let pages=[], current=0, timer, todayMode=false;
+let chart;
 
 // CSV parser (handles commas)
-function parseCSV(text) {
-  const rows = [];
-  let row = [], val = '', inside = false;
-
-  for (let c of text) {
-    if (c === '"') inside = !inside;
-    else if (c === ',' && !inside) { row.push(val); val=''; }
-    else if (c === '\n' && !inside) { row.push(val); rows.push(row); row=[]; val=''; }
-    else val += c;
+function parseCSV(text){
+  const rows=[]; let row=[],val='',q=false;
+  for(let c of text){
+    if(c=='"') q=!q;
+    else if(c==','&&!q){row.push(val);val=''}
+    else if(c=='\n'&&!q){row.push(val);rows.push(row);row=[];val=''}
+    else val+=c;
   }
+  if(val) row.push(val);
+  if(row.length) rows.push(row);
 
-  if (val) row.push(val);
-  if (row.length) rows.push(row);
+  headers=rows[0].map(h=>h.trim());
 
-  headers = rows[0].map(h => h.trim());
-
-  return rows.slice(1).map(r => {
-    let obj = {};
-    headers.forEach((h,i)=> obj[h] = (r[i]||'').trim());
-    return obj;
+  return rows.slice(1).map(r=>{
+    let o={};
+    headers.forEach((h,i)=>o[h]=(r[i]||'').trim());
+    return o;
   });
 }
 
-// Load
-function loadData() {
-  fetch(url)
-  .then(r=>r.text())
-  .then(t=>{
-    data = parseCSV(t);
+// Load data
+function load(){
+  fetch(url).then(r=>r.text()).then(t=>{
+    data=parseCSV(t);
     applyFilter();
   });
 }
 
 // Filter
-function applyFilter() {
-  if (!todayMode) {
-    filteredData = data;
-  } else {
-    let today = new Date().toLocaleDateString('en-GB');
-    filteredData = data.filter(r => r["SCHEDULE DATE"] === today);
+function applyFilter(){
+  if(!todayMode) filtered=data;
+  else{
+    let today=new Date().toLocaleDateString('en-GB');
+    filtered=data.filter(r=>r["SCHEDULE DATE"]===today);
   }
-
   build();
 }
 
 // Build UI
-function build() {
-  document.getElementById("pages").innerHTML = "";
-  pages = [];
-
+function build(){
+  document.getElementById("pages").innerHTML="";
+  pages=[];
   updateTiles();
   createSlides();
+  createChart();
+  generateInsights();
   show(0);
+  checkAlert();
 }
 
 // KPI
-function updateTiles() {
-  let sch=0, disp=0;
-
-  filteredData.forEach(r=>{
-    sch += Number(r["SCH QTY"]||0);
-    disp += Number(r["DISP QTY"]||0);
+function updateTiles(){
+  let sch=0,disp=0;
+  filtered.forEach(r=>{
+    sch+=+r["SCH QTY"]||0;
+    disp+=+r["DISP QTY"]||0;
   });
 
-  document.getElementById("sch").innerText = "Scheduled: "+sch;
-  document.getElementById("disp").innerText = "Dispatched: "+disp;
-  document.getElementById("pending").innerText = "Pending: "+(sch-disp);
-  document.getElementById("ach").innerText =
+  document.getElementById("sch").innerText="Scheduled: "+sch;
+  document.getElementById("disp").innerText="Dispatched: "+disp;
+  document.getElementById("pending").innerText="Pending: "+(sch-disp);
+  document.getElementById("ach").innerText=
     "Ach %: "+(sch?((disp/sch)*100).toFixed(1):0)+"%";
 }
 
 // Slides
-function createSlides() {
-  let group = {};
+function createSlides(){
+  let group={};
 
-  filteredData.forEach(r=>{
-    let c = r["CUSTOMER"] || "Unknown";
-    if (!group[c]) group[c]=[];
+  filtered.forEach(r=>{
+    let c=r["CUSTOMER"]||"Unknown";
+    if(!group[c]) group[c]=[];
     group[c].push(r);
   });
 
-  for (let c in group) {
-    let div = document.createElement("div");
+  for(let c in group){
+    let div=document.createElement("div");
     div.className="page";
-    div.innerHTML = `<h2>${c}</h2>` + table(group[c]);
-
-    document.getElementById("pages").appendChild(div);
+    div.innerHTML=`<h2>${c}</h2>`+table(group[c]);
     pages.push(div);
+    document.getElementById("pages").appendChild(div);
   }
 }
 
-// Table (dynamic)
-function table(rows) {
-  let html = "<table><tr>";
-  headers.forEach(h=> html+=`<th>${h}</th>`);
+// Table
+function table(rows){
+  let html="<table><tr>";
+  headers.forEach(h=>html+=`<th>${h}</th>`);
   html+="</tr>";
 
   rows.forEach(r=>{
-    let cls = (r["REMARKS"]||"").toLowerCase().includes("ready")?"ok":"bad";
+    let sch=+r["SCH QTY"]||0;
+    let disp=+r["DISP QTY"]||0;
+    let cls = (disp < sch) ? "bad" : "ok";
+
     html+=`<tr class="${cls}">`;
 
     headers.forEach(h=>{
@@ -235,27 +247,81 @@ function table(rows) {
   return html+"</table>";
 }
 
-// Slides control
+// Chart
+function createChart(){
+  let ctx=document.getElementById("chart");
+  let grp={};
+
+  filtered.forEach(r=>{
+    let c=r["CUSTOMER"];
+    grp[c]=(grp[c]||0)+(+r["DISP QTY"]||0);
+  });
+
+  if(chart) chart.destroy();
+
+  chart=new Chart(ctx,{
+    type:'bar',
+    data:{
+      labels:Object.keys(grp),
+      datasets:[{
+        label:'Dispatch Qty',
+        data:Object.values(grp)
+      }]
+    }
+  });
+}
+
+// AI Insights
+function generateInsights(){
+  let stats={}, pending=0;
+
+  filtered.forEach(r=>{
+    let c=r["CUSTOMER"]||"Unknown";
+    let sch=+r["SCH QTY"]||0;
+    let disp=+r["DISP QTY"]||0;
+
+    if(!stats[c]) stats[c]={sch:0,disp:0};
+
+    stats[c].sch+=sch;
+    stats[c].disp+=disp;
+
+    if(disp<sch) pending += (sch-disp);
+  });
+
+  let best="", worst="", bestRate=0, worstRate=100;
+
+  for(let c in stats){
+    let s=stats[c];
+    let rate=s.sch? (s.disp/s.sch)*100 : 0;
+
+    if(rate>bestRate){ bestRate=rate; best=c; }
+    if(rate<worstRate){ worstRate=rate; worst=c; }
+  }
+
+  document.getElementById("insights").innerHTML=`
+    🏆 Best: <b>${best}</b> (${bestRate.toFixed(1)}%)<br>
+    ⚠️ Risk: <b>${worst}</b> (${worstRate.toFixed(1)}%)<br>
+    📦 Pending Qty: <b>${pending}</b>
+  `;
+}
+
+// Alert sound
+function checkAlert(){
+  if(filtered.some(r=>(+r["DISP QTY"]||0)<(+r["SCH QTY"]||0))){
+    new Audio("https://www.soundjay.com/buttons/beep-01a.mp3").play();
+  }
+}
+
+// Controls
 function show(i){
   pages.forEach(p=>p.classList.remove("active"));
   if(pages[i]) pages[i].classList.add("active");
 }
-
-function nextSlide(){ current=(current+1)%pages.length; show(current); }
-function prevSlide(){ current=(current-1+pages.length)%pages.length; show(current); }
-
-function playSlide(){
-  clearInterval(timer);
-  timer=setInterval(nextSlide,4000);
-}
-
-function pauseSlide(){ clearInterval(timer); }
-
-// Toggle today
-function toggleToday(){
-  todayMode=!todayMode;
-  applyFilter();
-}
+function nextSlide(){current=(current+1)%pages.length;show(current);}
+function prevSlide(){current=(current-1+pages.length)%pages.length;show(current);}
+function playSlide(){clearInterval(timer);timer=setInterval(nextSlide,4000);}
+function pauseSlide(){clearInterval(timer);}
+function toggleToday(){todayMode=!todayMode;applyFilter();}
 
 // Clock
 setInterval(()=>{
@@ -263,10 +329,10 @@ setInterval(()=>{
 },1000);
 
 // Auto refresh
-setInterval(loadData,60000);
+setInterval(load,60000);
 
 // Start
-loadData();
+load();
 playSlide();
 
 </script>
