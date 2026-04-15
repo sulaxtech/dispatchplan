@@ -17,21 +17,19 @@
       justify-content: space-between;
       padding: 10px 20px;
       background: #111827;
-      font-size: 18px;
     }
 
-    .tiles {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
+    .tile-bar {
+      display: flex;
       gap: 10px;
-      padding: 15px;
+      padding: 10px;
     }
 
     .tile {
-      padding: 20px;
-      border-radius: 10px;
+      flex: 1;
+      padding: 15px;
+      border-radius: 8px;
       text-align: center;
-      font-size: 20px;
       font-weight: bold;
     }
 
@@ -42,7 +40,7 @@
 
     .page {
       display: none;
-      padding: 10px 20px;
+      padding: 20px;
     }
 
     .active {
@@ -53,21 +51,19 @@
       width: 100%;
       border-collapse: collapse;
       margin-top: 10px;
-      font-size: 14px;
     }
 
     th, td {
       border: 1px solid #374151;
-      padding: 6px;
+      padding: 8px;
       text-align: center;
     }
 
-    .row-green { background: #065f46; }
-    .row-red { background: #7f1d1d; }
+    .ok { background: #065f46; }
+    .bad { background: #7f1d1d; }
 
-    canvas {
-      width: 100% !important;
-      height: 300px !important;
+    h2 {
+      text-align: center;
     }
   </style>
 </head>
@@ -75,20 +71,18 @@
 <body>
 
 <div class="header">
-  <div>📊 DISPATCH DASHBOARD</div>
+  <div>📊 Dispatch Dashboard</div>
   <div id="clock"></div>
 </div>
 
-<div class="tiles">
-  <div class="tile blue" id="totalSch">Total Sch: 0</div>
-  <div class="tile green" id="totalDisp">Total Disp: 0</div>
+<div class="tile-bar">
+  <div class="tile blue" id="sch">Scheduled: 0</div>
+  <div class="tile green" id="disp">Dispatched: 0</div>
   <div class="tile orange" id="pending">Pending: 0</div>
-  <div class="tile red" id="achievement">Ach %: 0%</div>
+  <div class="tile red" id="ach">Ach %: 0</div>
 </div>
 
 <div id="pages"></div>
-
-<canvas id="chart"></canvas>
 
 <script>
 
@@ -98,7 +92,7 @@ let data = [];
 let pages = [];
 let currentPage = 0;
 
-// CSV SAFE PARSE
+// SAFE CSV
 function parseCSV(text) {
   const rows = text.trim().split("\n").map(r => r.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
   const headers = rows[0];
@@ -110,68 +104,61 @@ function parseCSV(text) {
   });
 }
 
-// DATE FORMAT
-function formatDate(d) {
-  let date = new Date(d);
-  if (isNaN(date)) return d;
-
-  let day = String(date.getDate()).padStart(2, '0');
-  let month = String(date.getMonth() + 1).padStart(2, '0');
-  let year = date.getFullYear();
-
-  return `${day}-${month}-${year}`;
-}
-
-// FETCH
+// FETCH DATA
 fetch(sheetURL)
   .then(res => res.text())
   .then(csv => {
     data = parseCSV(csv);
+    console.log("Loaded:", data);
     init();
-  });
+  })
+  .catch(err => console.error(err));
 
 // INIT
 function init() {
+  if (!data.length) {
+    document.body.innerHTML += "<h2 style='color:red;text-align:center'>No Data Found</h2>";
+    return;
+  }
+
   updateTiles();
-  createCustomerPages();
-  createChart();
+  createCustomerSlides();
   startSlideshow();
 }
 
-// TILES
+// KPI
 function updateTiles() {
-  let totalSch = 0;
-  let totalDisp = 0;
+  let sch = 0, disp = 0;
 
   data.forEach(r => {
-    totalSch += Number(r["SCH QTY"] || 0);
-    totalDisp += Number(r["DISP QTY"] || 0);
+    sch += Number(r["SCH QTY"] || 0);
+    disp += Number(r["DISP QTY"] || 0);
   });
 
-  let pending = totalSch - totalDisp;
-  let ach = totalSch ? ((totalDisp / totalSch) * 100).toFixed(1) : 0;
-
-  document.getElementById("totalSch").innerText = "Total Sch: " + totalSch;
-  document.getElementById("totalDisp").innerText = "Total Disp: " + totalDisp;
-  document.getElementById("pending").innerText = "Pending: " + pending;
-  document.getElementById("achievement").innerText = "Ach %: " + ach + "%";
+  document.getElementById("sch").innerText = "Scheduled: " + sch;
+  document.getElementById("disp").innerText = "Dispatched: " + disp;
+  document.getElementById("pending").innerText = "Pending: " + (sch - disp);
+  document.getElementById("ach").innerText = "Ach %: " + ((disp/sch*100)||0).toFixed(1);
 }
 
-// CUSTOMER PAGES
-function createCustomerPages() {
-  const today = formatDate(new Date());
-  const customers = [...new Set(data.map(r => r["CUSTOMER"]))];
+// GROUP BY CUSTOMER
+function createCustomerSlides() {
 
-  customers.forEach(c => {
+  let grouped = {};
+
+  data.forEach(r => {
+    let c = r["CUSTOMER"] || "Unknown";
+
+    if (!grouped[c]) grouped[c] = [];
+    grouped[c].push(r);
+  });
+
+  Object.keys(grouped).forEach(c => {
+
     let div = document.createElement("div");
     div.className = "page";
 
-    let rows = data.filter(r =>
-      r["CUSTOMER"] == c &&
-      formatDate(r["SCHEDULE DATE"]) == today
-    );
-
-    div.innerHTML = `<h2>${c} - Today</h2>` + createTable(rows);
+    div.innerHTML = `<h2>${c}</h2>` + createTable(grouped[c]);
 
     document.getElementById("pages").appendChild(div);
     pages.push(div);
@@ -187,15 +174,15 @@ function createTable(rows) {
       <th>MANAGER</th>
       <th>SCH</th>
       <th>DISP</th>
-      <th>STATUS</th>
+      <th>REMARKS</th>
     </tr>`;
 
   rows.forEach(r => {
     let remark = (r["REMARKS"] || "").toLowerCase();
 
-    let cls = (remark === "ready" || remark === "production" || remark === "welding")
-      ? "row-green"
-      : "row-red";
+    let cls = (remark.includes("ready") || remark.includes("production") || remark.includes("welding"))
+      ? "ok"
+      : "bad";
 
     html += `<tr class="${cls}">
       <td>${r["SI NO"]}</td>
@@ -211,37 +198,16 @@ function createTable(rows) {
   return html;
 }
 
-// CHART
-function createChart() {
-  let ctx = document.getElementById("chart");
-
-  let grouped = {};
-
-  data.forEach(r => {
-    let c = r["CUSTOMER"];
-    let disp = Number(r["DISP QTY"] || 0);
-    grouped[c] = (grouped[c] || 0) + disp;
-  });
-
-  new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: Object.keys(grouped),
-      datasets: [{
-        label: 'Dispatch Qty',
-        data: Object.values(grouped)
-      }]
-    }
-  });
-}
-
 // SLIDESHOW
 function startSlideshow() {
   setInterval(() => {
     pages.forEach(p => p.classList.remove("active"));
-    pages[currentPage].classList.add("active");
 
-    currentPage = (currentPage + 1) % pages.length;
+    if (pages.length) {
+      pages[currentPage].classList.add("active");
+      currentPage = (currentPage + 1) % pages.length;
+    }
+
   }, 4000);
 }
 
