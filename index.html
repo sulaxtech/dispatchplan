@@ -5,97 +5,39 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
-    body {
-      margin: 0;
-      font-family: Arial;
-      background: #0b0f1a;
-      color: white;
+    body { margin:0; font-family:Arial; background:#0b0f1a; color:white; }
+
+    .header { display:flex; justify-content:space-between; padding:10px 20px; background:#111827; font-size:20px; }
+
+    .tiles { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; padding:10px; }
+
+    .tile { padding:20px; border-radius:10px; text-align:center; }
+    .blue{background:#1e3a8a;} .green{background:#065f46;}
+    .orange{background:#92400e;} .red{background:#7f1d1d;}
+
+    .controls{text-align:center;padding:10px;}
+    .controls button, .controls input {
+      padding:8px; margin:5px; border:none; border-radius:6px;
     }
 
-    .header {
-      display: flex;
-      justify-content: space-between;
-      padding: 10px 20px;
-      background: #111827;
-      font-size: 20px;
-      font-weight: bold;
-    }
+    #aiPanel{background:#111827;margin:10px;padding:10px;}
 
-    .tiles {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 10px;
-      padding: 10px;
-    }
+    .page{display:none;padding:15px;}
+    .active{display:block;}
 
-    .tile {
-      padding: 20px;
-      border-radius: 10px;
-      text-align: center;
-    }
+    table{width:100%;border-collapse:collapse;font-size:13px;}
+    th,td{border:1px solid #374151;padding:6px;text-align:center;}
+    th{background:#1f2937;}
 
-    .blue { background: #1e3a8a; }
-    .green { background: #065f46; }
-    .orange { background: #92400e; }
-    .red { background: #7f1d1d; }
+    .ok{background:#065f46;}
+    .bad{background:#7f1d1d;animation:blink 1s infinite;}
 
-    .controls {
-      text-align: center;
-      padding: 10px;
-    }
+    @keyframes blink{50%{opacity:0.4;}}
 
-    .controls button {
-      padding: 10px;
-      margin: 5px;
-      border: none;
-      border-radius: 6px;
-      background: #2563eb;
-      color: white;
-      cursor: pointer;
-    }
-
-    #aiPanel {
-      background: #111827;
-      margin: 10px;
-      padding: 10px;
-    }
-
-    .page {
-      display: none;
-      padding: 15px;
-    }
-
-    .active {
-      display: block;
-    }
-
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 13px;
-    }
-
-    th, td {
-      border: 1px solid #374151;
-      padding: 6px;
-      text-align: center;
-    }
-
-    th { background: #1f2937; }
-
-    .ok { background: #065f46; }
-    .bad {
-      background: #7f1d1d;
-      animation: blink 1s infinite;
-    }
-
-    @keyframes blink {
-      50% { opacity: 0.4; }
-    }
-
-    canvas {
-      width: 100% !important;
-      height: 300px !important;
+    /* 📉 SLIM TREND CHART */
+    .trend-container{
+      height:180px;
+      padding:10px;
     }
   </style>
 </head>
@@ -108,10 +50,10 @@
 </div>
 
 <div class="tiles">
-  <div class="tile blue" id="sch">Scheduled: 0</div>
-  <div class="tile green" id="disp">Dispatched: 0</div>
-  <div class="tile orange" id="pending">Pending: 0</div>
-  <div class="tile red" id="ach">Ach %: 0%</div>
+  <div class="tile blue" id="sch"></div>
+  <div class="tile green" id="disp"></div>
+  <div class="tile orange" id="pending"></div>
+  <div class="tile red" id="ach"></div>
 </div>
 
 <div class="controls">
@@ -119,7 +61,8 @@
   <button onclick="pauseSlide()">⏸</button>
   <button onclick="playSlide()">▶</button>
   <button onclick="nextSlide()">⏭</button>
-  <button onclick="toggleToday()">📅</button>
+
+  📅 <input type="date" id="datePicker" onchange="applyDateFilter()">
 </div>
 
 <div id="aiPanel">
@@ -129,17 +72,16 @@
 
 <div id="pages"></div>
 
-<canvas id="chart"></canvas>
-
 <script>
 
-const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JFJP5dxHBSQ8-4m45W47nxwwLUBDs1INcHO6jswUCnk3kp57AP3tQq19qccF/pub?output=csv";
+const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JFJP5dxHBSQ8-4m45W47nxwwLUBDs1INcHO6jswUCnk3kp57AP3tQq19qccF/pub?output=csv";
 
 let data=[], filtered=[], headers=[];
-let pages=[], current=0, timer, todayMode=false;
-let chart;
+let pages=[], current=0, timer;
+let selectedDate=null;
+let trendChart;
 
-// CSV parser (handles commas)
+// CSV parser
 function parseCSV(text){
   const rows=[]; let row=[],val='',q=false;
   for(let c of text){
@@ -154,27 +96,37 @@ function parseCSV(text){
   headers=rows[0].map(h=>h.trim());
 
   return rows.slice(1).map(r=>{
-    let o={};
-    headers.forEach((h,i)=>o[h]=(r[i]||'').trim());
+    let o={}; headers.forEach((h,i)=>o[h]=(r[i]||'').trim());
     return o;
   });
 }
 
-// Load data
+// Date format
+function formatDate(d){
+  let date=new Date(d);
+  if(isNaN(date)) return (d||"").replace(/-/g,'/');
+  return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
+}
+
+// Load
 function load(){
   fetch(url).then(r=>r.text()).then(t=>{
     data=parseCSV(t);
-    applyFilter();
+    applyDateFilter();
   });
 }
 
-// Filter
-function applyFilter(){
-  if(!todayMode) filtered=data;
-  else{
-    let today=new Date().toLocaleDateString('en-GB');
-    filtered=data.filter(r=>r["SCHEDULE DATE"]===today);
+// 📅 Date filter
+function applyDateFilter(){
+  let val=document.getElementById("datePicker").value;
+
+  if(!val){
+    filtered=data;
+  }else{
+    let sel=formatDate(val);
+    filtered=data.filter(r=>formatDate(r["SCHEDULE DATE"])===sel);
   }
+
   build();
 }
 
@@ -182,17 +134,19 @@ function applyFilter(){
 function build(){
   document.getElementById("pages").innerHTML="";
   pages=[];
+
   updateTiles();
   createSlides();
-  createChart();
+  createTrendSlide();
   generateInsights();
+
   show(0);
-  checkAlert();
 }
 
 // KPI
 function updateTiles(){
   let sch=0,disp=0;
+
   filtered.forEach(r=>{
     sch+=+r["SCH QTY"]||0;
     disp+=+r["DISP QTY"]||0;
@@ -231,85 +185,78 @@ function table(rows){
   html+="</tr>";
 
   rows.forEach(r=>{
-    let sch=+r["SCH QTY"]||0;
-    let disp=+r["DISP QTY"]||0;
-    let cls = (disp < sch) ? "bad" : "ok";
-
+    let cls=(+r["DISP QTY"] < +r["SCH QTY"])?"bad":"ok";
     html+=`<tr class="${cls}">`;
-
-    headers.forEach(h=>{
-      html+=`<td>${r[h]||"-"}</td>`;
-    });
-
+    headers.forEach(h=>html+=`<td>${r[h]||"-"}</td>`);
     html+="</tr>";
   });
 
   return html+"</table>";
 }
 
-// Chart
-function createChart(){
-  let ctx=document.getElementById("chart");
-  let grp={};
+// 📊 TREND SLIDE
+function createTrendSlide(){
 
-  filtered.forEach(r=>{
-    let c=r["CUSTOMER"];
-    grp[c]=(grp[c]||0)+(+r["DISP QTY"]||0);
+  let trendDiv=document.createElement("div");
+  trendDiv.className="page";
+
+  trendDiv.innerHTML=`
+    <h2>📊 Monthly Dispatch Trend</h2>
+    <div class="trend-container">
+      <canvas id="trendChart"></canvas>
+    </div>
+  `;
+
+  document.getElementById("pages").appendChild(trendDiv);
+  pages.push(trendDiv);
+
+  // Prepare trend data
+  let trend={};
+
+  data.forEach(r=>{
+    let d=formatDate(r["SCHEDULE DATE"]);
+    let day=d.split("/")[0];
+
+    if(!trend[day]) trend[day]=0;
+    trend[day]+=+r["DISP QTY"]||0;
   });
 
-  if(chart) chart.destroy();
+  let labels=Object.keys(trend).sort((a,b)=>a-b);
+  let values=labels.map(d=>trend[d]);
 
-  chart=new Chart(ctx,{
-    type:'bar',
+  if(trendChart) trendChart.destroy();
+
+  trendChart=new Chart(document.getElementById("trendChart"),{
+    type:'line',
     data:{
-      labels:Object.keys(grp),
+      labels:labels,
       datasets:[{
-        label:'Dispatch Qty',
-        data:Object.values(grp)
+        label:'Daily Dispatch',
+        data:values,
+        tension:0.3
       }]
+    },
+    options:{
+      plugins:{legend:{display:false}},
+      scales:{
+        x:{ticks:{color:'white'}},
+        y:{ticks:{color:'white'}}
+      }
     }
   });
 }
 
 // AI Insights
 function generateInsights(){
-  let stats={}, pending=0;
+  let pending=0;
 
   filtered.forEach(r=>{
-    let c=r["CUSTOMER"]||"Unknown";
-    let sch=+r["SCH QTY"]||0;
-    let disp=+r["DISP QTY"]||0;
-
-    if(!stats[c]) stats[c]={sch:0,disp:0};
-
-    stats[c].sch+=sch;
-    stats[c].disp+=disp;
-
-    if(disp<sch) pending += (sch-disp);
+    if(+r["DISP QTY"] < +r["SCH QTY"])
+      pending+=(+r["SCH QTY"]-+r["DISP QTY"]);
   });
 
-  let best="", worst="", bestRate=0, worstRate=100;
-
-  for(let c in stats){
-    let s=stats[c];
-    let rate=s.sch? (s.disp/s.sch)*100 : 0;
-
-    if(rate>bestRate){ bestRate=rate; best=c; }
-    if(rate<worstRate){ worstRate=rate; worst=c; }
-  }
-
-  document.getElementById("insights").innerHTML=`
-    🏆 Best: <b>${best}</b> (${bestRate.toFixed(1)}%)<br>
-    ⚠️ Risk: <b>${worst}</b> (${worstRate.toFixed(1)}%)<br>
-    📦 Pending Qty: <b>${pending}</b>
-  `;
-}
-
-// Alert sound
-function checkAlert(){
-  if(filtered.some(r=>(+r["DISP QTY"]||0)<(+r["SCH QTY"]||0))){
-    new Audio("https://www.soundjay.com/buttons/beep-01a.mp3").play();
-  }
+  document.getElementById("insights").innerHTML=
+    `📦 Total Pending: <b>${pending}</b>`;
 }
 
 // Controls
@@ -321,15 +268,9 @@ function nextSlide(){current=(current+1)%pages.length;show(current);}
 function prevSlide(){current=(current-1+pages.length)%pages.length;show(current);}
 function playSlide(){clearInterval(timer);timer=setInterval(nextSlide,4000);}
 function pauseSlide(){clearInterval(timer);}
-function toggleToday(){todayMode=!todayMode;applyFilter();}
 
 // Clock
-setInterval(()=>{
-  document.getElementById("clock").innerText=new Date().toLocaleString();
-},1000);
-
-// Auto refresh
-setInterval(load,60000);
+setInterval(()=>{document.getElementById("clock").innerText=new Date().toLocaleString();},1000);
 
 // Start
 load();
