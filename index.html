@@ -22,7 +22,6 @@
       border-radius:12px;
       text-align:center;
       background:linear-gradient(135deg,#1f2937,#111827);
-      box-shadow:0 4px 10px rgba(0,0,0,0.5);
     }
 
     .controls { text-align:center; padding:10px; }
@@ -68,9 +67,7 @@
     canvas {
       width:100% !important;
       height:100% !important;
-      image-rendering: crisp-edges;
     }
-
   </style>
 </head>
 
@@ -103,6 +100,35 @@
 /* FIX BLUR */
 Chart.defaults.devicePixelRatio = window.devicePixelRatio || 2;
 
+/* % LABEL PLUGIN */
+const valueLabelPlugin = {
+  id: 'valueLabel',
+  afterDatasetsDraw(chart) {
+    const {ctx} = chart;
+    ctx.save();
+
+    let dispMeta = chart.getDatasetMeta(1);
+
+    chart.data.labels.forEach((label, i) => {
+      let disp = chart.data.datasets[1].data[i];
+      let sch = chart.data.datasets[0].data[i];
+
+      let percent = sch ? ((disp / sch) * 100).toFixed(0) : 0;
+
+      let x = dispMeta.data[i].x;
+      let y = dispMeta.data[i].y - 15;
+
+      ctx.fillStyle = percent >= 100 ? "#22c55e" : "#ef4444";
+      ctx.font = "bold 13px Arial";
+      ctx.textAlign = "center";
+
+      ctx.fillText(percent + "%", x, y);
+    });
+
+    ctx.restore();
+  }
+};
+
 const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JFJP5dxHBSQ8-4m45W47nxwwLUBDs1INcHO6jswUCnk3kp57AP3tQq19qccF/pub?output=csv";
 
 let data=[], filtered=[], headers=[];
@@ -111,20 +137,10 @@ let trendChart, barChart;
 
 /* CSV */
 function parseCSV(text){
-  const rows=[]; let row=[],val='',q=false;
-  for(let c of text){
-    if(c=='"') q=!q;
-    else if(c==','&&!q){row.push(val);val=''}
-    else if(c=='\n'&&!q){row.push(val);rows.push(row);row=[];val=''}
-    else val+=c;
-  }
-  if(val) row.push(val);
-  if(row.length) rows.push(row);
-
-  headers=rows[0].map(h=>h.trim());
-
+  const rows=text.trim().split("\n").map(r=>r.split(","));
+  headers=rows[0];
   return rows.slice(1).map(r=>{
-    let o={}; headers.forEach((h,i)=>o[h]=(r[i]||'').trim());
+    let o={}; headers.forEach((h,i)=>o[h]=r[i]);
     return o;
   });
 }
@@ -132,7 +148,7 @@ function parseCSV(text){
 /* DATE */
 function formatDate(d){
   let date=new Date(d);
-  if(isNaN(date)) return (d||"").replace(/-/g,'/');
+  if(isNaN(date)) return "";
   return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
 }
 
@@ -237,10 +253,16 @@ function createChartSlide(){
   pages.push(div);
   document.getElementById("pages").appendChild(div);
 
-  /* TREND */
+  /* TREND FIX */
   let trend={};
+
   data.forEach(r=>{
-    let d=formatDate(r["SCHEDULE DATE"]);
+    let raw=r["SCHEDULE DATE"];
+    if(!raw) return;
+
+    let d=formatDate(raw);
+    if(!d) return;
+
     let day=d.split("/")[0];
     trend[day]=(trend[day]||0)+(+r["DISP QTY"]||0);
   });
@@ -264,9 +286,8 @@ function createChartSlide(){
     }
   });
 
-  /* BAR - SCH vs DISP */
-
-  let grp={}, target={};
+  /* BAR */
+  let grp={},target={};
 
   data.forEach(r=>{
     let c=r["CUSTOMER"];
@@ -274,15 +295,9 @@ function createChartSlide(){
     target[c]=(target[c]||0)+(+r["SCH QTY"]||0);
   });
 
-  let customers = Object.keys(target)
+  let customers=Object.keys(target)
     .sort((a,b)=>target[b]-target[a])
     .slice(0,6);
-
-  let percent = customers.map(c=>{
-    let t=target[c]||0;
-    let d=grp[c]||0;
-    return t?((d/t)*100).toFixed(0):0;
-  });
 
   if(barChart) barChart.destroy();
 
@@ -295,20 +310,7 @@ function createChartSlide(){
         {label:"DISP QTY",data:customers.map(c=>grp[c]),backgroundColor:"#22c55e"}
       ]
     },
-    options:{
-      plugins:{
-        legend:{labels:{color:"white"}},
-        tooltip:{
-          callbacks:{
-            afterBody:(ctx)=>"Ach: "+percent[ctx[0].dataIndex]+"%"
-          }
-        }
-      },
-      scales:{
-        x:{ticks:{color:"white"}},
-        y:{ticks:{color:"white"}}
-      }
-    }
+    plugins:[valueLabelPlugin]
   });
 }
 
@@ -316,7 +318,7 @@ function createChartSlide(){
 function show(i){pages.forEach(p=>p.classList.remove("active")); if(pages[i]) pages[i].classList.add("active");}
 function nextSlide(){current=(current+1)%pages.length;show(current);}
 function prevSlide(){current=(current-1+pages.length)%pages.length;show(current);}
-function playSlide(){clearInterval(timer);timer=setInterval(nextSlide,4000);}
+function playSlide(){clearInterval(timer);timer=setInterval(nextSlide,8000);}
 function pauseSlide(){clearInterval(timer);}
 
 /* CLOCK */
