@@ -37,14 +37,9 @@
     .orange { background: #92400e; }
     .red { background: #7f1d1d; }
 
-    /* ✅ FIXED CONTROLS VISIBILITY */
     .controls {
-      position: sticky;
-      top: 0;
-      background: #0b0f1a;
-      padding: 10px;
       text-align: center;
-      z-index: 1000;
+      padding: 10px;
     }
 
     .controls button {
@@ -101,9 +96,8 @@
   <div class="tile red" id="ach">Ach %: 0%</div>
 </div>
 
-<!-- ✅ CONTROLS ALWAYS VISIBLE -->
 <div class="controls">
-  <button onclick="prevSlide()">⏮ Previous</button>
+  <button onclick="prevSlide()">⏮ Prev</button>
   <button onclick="pauseSlide()">⏸ Pause</button>
   <button onclick="playSlide()">▶ Play</button>
   <button onclick="nextSlide()">⏭ Next</button>
@@ -113,51 +107,49 @@
 
 <script>
 
-const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JFJP5dxHBSQ8-4m45W47nxwwLUBDs1INcHO6jswUCnk3kp57AP3tQq19qccF/pub?output=csv";
+const url = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JFJP5dxHBSQ8-4m45W47nxwwLUBDs1INcHO6jswUCnk3kp57AP3tQq19qccF/pub?output=csv";
 
 let data = [];
 let pages = [];
-let currentPage = 0;
-let slideInterval;
+let current = 0;
+let timer;
 
-// ✅ STRONG PARSER + DEBUG
+// SIMPLE CSV PARSER (SAFE)
 function parseCSV(text) {
-  const rows = text.trim().split("\n").map(r =>
-    r.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
-  );
+  let lines = text.trim().split("\n");
+  let headers = lines[0].split(",").map(h => h.trim().toUpperCase());
 
-  const headers = rows[0].map(h =>
-    h.replace(/\s+/g, '').toUpperCase()
-  );
-
-  console.log("HEADERS:", headers); // debug
-
-  return rows.slice(1).map(r => {
+  return lines.slice(1).map(line => {
+    let values = line.split(",");
     let obj = {};
-    headers.forEach((h, i) => {
-      obj[h] = r[i]?.replace(/"/g, '').trim();
-    });
+    headers.forEach((h, i) => obj[h] = values[i]?.trim());
     return obj;
   });
 }
 
-// FETCH
-fetch(sheetURL)
-  .then(res => res.text())
-  .then(csv => {
-    data = parseCSV(csv);
-    console.log("DATA:", data);
-    init();
-  })
-  .catch(err => console.error(err));
+// LOAD DATA
+fetch(url)
+.then(r => r.text())
+.then(t => {
+  data = parseCSV(t);
+  console.log(data);
+  init();
+})
+.catch(e => {
+  document.body.innerHTML += "<h2 style='color:red'>Error loading data</h2>";
+});
 
 // INIT
 function init() {
-  data = data.filter(r => r["CUSTOMER"]);
+
+  if (!data.length) {
+    document.body.innerHTML += "<h2 style='color:red'>No Data Found</h2>";
+    return;
+  }
 
   updateTiles();
   createSlides();
-  showSlide(0);
+  show(0);
   playSlide();
 }
 
@@ -166,43 +158,41 @@ function updateTiles() {
   let sch = 0, disp = 0;
 
   data.forEach(r => {
-    sch += Number(r["SCHQTY"] || 0);
-    disp += Number(r["DISPQTY"] || 0);
+    sch += Number(r["SCH QTY"] || 0);
+    disp += Number(r["DISP QTY"] || 0);
   });
-
-  let pending = sch - disp;
-  let ach = sch ? ((disp / sch) * 100).toFixed(1) : 0;
 
   document.getElementById("sch").innerText = "Scheduled: " + sch;
   document.getElementById("disp").innerText = "Dispatched: " + disp;
-  document.getElementById("pending").innerText = "Pending: " + pending;
-  document.getElementById("ach").innerText = "Ach %: " + ach + "%";
+  document.getElementById("pending").innerText = "Pending: " + (sch - disp);
+  document.getElementById("ach").innerText =
+    "Ach %: " + (sch ? ((disp/sch)*100).toFixed(1) : 0) + "%";
 }
 
-// SLIDES
+// GROUP BY CUSTOMER
 function createSlides() {
-  let grouped = {};
+
+  let group = {};
 
   data.forEach(r => {
-    let c = r["CUSTOMER"];
-
-    if (!grouped[c]) grouped[c] = [];
-    grouped[c].push(r);
+    let c = r["CUSTOMER"] || "Unknown";
+    if (!group[c]) group[c] = [];
+    group[c].push(r);
   });
 
-  Object.keys(grouped).forEach(c => {
+  for (let c in group) {
     let div = document.createElement("div");
     div.className = "page";
 
-    div.innerHTML = `<h2>${c}</h2>` + createTable(grouped[c]);
+    div.innerHTML = `<h2>${c}</h2>` + table(group[c]);
 
     document.getElementById("pages").appendChild(div);
     pages.push(div);
-  });
+  }
 }
 
 // TABLE
-function createTable(rows) {
+function table(rows) {
   let html = `<table>
     <tr>
       <th>SI NO</th>
@@ -214,49 +204,45 @@ function createTable(rows) {
     </tr>`;
 
   rows.forEach(r => {
-    let remark = (r["REMARKS"] || "").toLowerCase();
-
-    let cls = (remark.includes("ready") || remark.includes("production") || remark.includes("welding"))
-      ? "ok"
-      : "bad";
+    let cls = (r["REMARKS"] || "").toLowerCase().includes("ready")
+      ? "ok" : "bad";
 
     html += `<tr class="${cls}">
-      <td>${r["SINO"] || "-"}</td>
-      <td>${r["ITEMNAME"] || "-"}</td>
-      <td>${r["PROJECTPROGRAMMANAGER"] || "-"}</td>
-      <td>${r["SCHQTY"] || 0}</td>
-      <td>${r["DISPQTY"] || 0}</td>
+      <td>${r["SI NO"] || "-"}</td>
+      <td>${r["ITEM NAME"] || "-"}</td>
+      <td>${r["PROJECT PROGRAM MANAGER"] || "-"}</td>
+      <td>${r["SCH QTY"] || 0}</td>
+      <td>${r["DISP QTY"] || 0}</td>
       <td>${r["REMARKS"] || "-"}</td>
     </tr>`;
   });
 
-  html += `</table>`;
-  return html;
+  return html + "</table>";
 }
 
-// SLIDE CONTROL
-function showSlide(index) {
+// SLIDES
+function show(i) {
   pages.forEach(p => p.classList.remove("active"));
-  if (pages[index]) pages[index].classList.add("active");
+  if (pages[i]) pages[i].classList.add("active");
 }
 
 function nextSlide() {
-  currentPage = (currentPage + 1) % pages.length;
-  showSlide(currentPage);
+  current = (current + 1) % pages.length;
+  show(current);
 }
 
 function prevSlide() {
-  currentPage = (currentPage - 1 + pages.length) % pages.length;
-  showSlide(currentPage);
+  current = (current - 1 + pages.length) % pages.length;
+  show(current);
 }
 
 function playSlide() {
-  clearInterval(slideInterval);
-  slideInterval = setInterval(nextSlide, 4000);
+  clearInterval(timer);
+  timer = setInterval(nextSlide, 4000);
 }
 
 function pauseSlide() {
-  clearInterval(slideInterval);
+  clearInterval(timer);
 }
 
 // CLOCK
