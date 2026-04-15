@@ -15,28 +15,34 @@
     .header {
       display: flex;
       justify-content: space-between;
-      padding: 10px;
+      padding: 10px 20px;
       background: #111827;
+      font-size: 18px;
     }
 
-    .buttons {
-      display: flex;
-      flex-wrap: wrap;
-      gap: 5px;
+    .tiles {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 10px;
+      padding: 15px;
     }
 
-    button {
-      padding: 6px 12px;
-      background: #2563eb;
-      border: none;
-      color: white;
-      cursor: pointer;
-      border-radius: 5px;
+    .tile {
+      padding: 20px;
+      border-radius: 10px;
+      text-align: center;
+      font-size: 20px;
+      font-weight: bold;
     }
+
+    .blue { background: #1e3a8a; }
+    .green { background: #065f46; }
+    .red { background: #7f1d1d; }
+    .orange { background: #92400e; }
 
     .page {
       display: none;
-      padding: 20px;
+      padding: 10px 20px;
     }
 
     .active {
@@ -47,19 +53,21 @@
       width: 100%;
       border-collapse: collapse;
       margin-top: 10px;
+      font-size: 14px;
     }
 
     th, td {
       border: 1px solid #374151;
-      padding: 8px;
+      padding: 6px;
       text-align: center;
     }
 
-    .green { background: #065f46; }
-    .red { background: #7f1d1d; }
+    .row-green { background: #065f46; }
+    .row-red { background: #7f1d1d; }
 
-    h2 {
-      text-align: center;
+    canvas {
+      width: 100% !important;
+      height: 300px !important;
     }
   </style>
 </head>
@@ -67,23 +75,30 @@
 <body>
 
 <div class="header">
-  <div id="date"></div>
-  <div class="buttons" id="customerButtons"></div>
+  <div>📊 DISPATCH DASHBOARD</div>
+  <div id="clock"></div>
+</div>
+
+<div class="tiles">
+  <div class="tile blue" id="totalSch">Total Sch: 0</div>
+  <div class="tile green" id="totalDisp">Total Disp: 0</div>
+  <div class="tile orange" id="pending">Pending: 0</div>
+  <div class="tile red" id="achievement">Ach %: 0%</div>
 </div>
 
 <div id="pages"></div>
-<canvas id="chartPage"></canvas>
+
+<canvas id="chart"></canvas>
 
 <script>
 
 const sheetURL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JFJP5dxHBSQ8-4m45W47nxwwLUBDs1INcHO6jswUCnk3kp57AP3tQq19qccF/pub?output=csv";
 
 let data = [];
-let customers = [];
 let pages = [];
 let currentPage = 0;
 
-// ✅ SAFE CSV PARSER
+// CSV SAFE PARSE
 function parseCSV(text) {
   const rows = text.trim().split("\n").map(r => r.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
   const headers = rows[0];
@@ -95,10 +110,10 @@ function parseCSV(text) {
   });
 }
 
-// ✅ DATE FORMAT FIX
+// DATE FORMAT
 function formatDate(d) {
   let date = new Date(d);
-  if (isNaN(date)) return d; // if already string
+  if (isNaN(date)) return d;
 
   let day = String(date.getDate()).padStart(2, '0');
   let month = String(date.getMonth() + 1).padStart(2, '0');
@@ -107,124 +122,60 @@ function formatDate(d) {
   return `${day}-${month}-${year}`;
 }
 
-// FETCH DATA
+// FETCH
 fetch(sheetURL)
   .then(res => res.text())
   .then(csv => {
     data = parseCSV(csv);
-    console.log("DATA:", data); // debug
     init();
-  })
-  .catch(err => console.error("Error loading sheet:", err));
+  });
 
 // INIT
 function init() {
-  customers = [...new Set(data.map(r => r["Customer"]))];
-
-  createButtons();
+  updateTiles();
   createCustomerPages();
-  createFailurePage();
-  createChartPage();
-  createOverallPage();
-
+  createChart();
   startSlideshow();
 }
 
-// BUTTONS
-function createButtons() {
-  const container = document.getElementById("customerButtons");
+// TILES
+function updateTiles() {
+  let totalSch = 0;
+  let totalDisp = 0;
 
-  customers.forEach(c => {
-    let btn = document.createElement("button");
-    btn.innerText = c;
-    btn.onclick = () => showCustomer(c);
-    container.appendChild(btn);
+  data.forEach(r => {
+    totalSch += Number(r["SCH QTY"] || 0);
+    totalDisp += Number(r["DISP QTY"] || 0);
   });
+
+  let pending = totalSch - totalDisp;
+  let ach = totalSch ? ((totalDisp / totalSch) * 100).toFixed(1) : 0;
+
+  document.getElementById("totalSch").innerText = "Total Sch: " + totalSch;
+  document.getElementById("totalDisp").innerText = "Total Disp: " + totalDisp;
+  document.getElementById("pending").innerText = "Pending: " + pending;
+  document.getElementById("achievement").innerText = "Ach %: " + ach + "%";
 }
 
 // CUSTOMER PAGES
 function createCustomerPages() {
   const today = formatDate(new Date());
+  const customers = [...new Set(data.map(r => r["CUSTOMER"]))];
 
   customers.forEach(c => {
     let div = document.createElement("div");
     div.className = "page";
 
     let rows = data.filter(r =>
-      r["Customer"] == c &&
-      formatDate(r["Date"]) == today
+      r["CUSTOMER"] == c &&
+      formatDate(r["SCHEDULE DATE"]) == today
     );
 
-    div.innerHTML = `<h2>${c} - Today Dispatch</h2>` + createTable(rows);
+    div.innerHTML = `<h2>${c} - Today</h2>` + createTable(rows);
 
     document.getElementById("pages").appendChild(div);
     pages.push(div);
   });
-}
-
-// YESTERDAY FAILURE
-function createFailurePage() {
-  let div = document.createElement("div");
-  div.className = "page";
-
-  let d = new Date();
-  d.setDate(d.getDate() - 1);
-  let y = formatDate(d);
-
-  let rows = data.filter(r =>
-    formatDate(r["Date"]) == y &&
-    Number(r["Sch Qty"]) > Number(r["Disp Qty"])
-  );
-
-  div.innerHTML = `<h2>Yesterday Dispatch Failure</h2>` + createTable(rows);
-
-  document.getElementById("pages").appendChild(div);
-  pages.push(div);
-}
-
-// CHART
-function createChartPage() {
-  let ctx = document.getElementById("chartPage");
-
-  let grouped = {};
-
-  data.forEach(r => {
-    let c = r["Customer"];
-    let disp = Number(r["Disp Qty"] || 0);
-
-    if (r["Remarks"] === "Dispatched") {
-      grouped[c] = (grouped[c] || 0) + disp;
-    }
-  });
-
-  new Chart(ctx, {
-    type: 'bar',
-    data: {
-      labels: Object.keys(grouped),
-      datasets: [{
-        label: 'Dispatched Qty',
-        data: Object.values(grouped)
-      }]
-    }
-  });
-}
-
-// OVERALL
-function createOverallPage() {
-  let div = document.createElement("div");
-  div.className = "page";
-
-  let totalSch = data.reduce((a,b)=>a+Number(b["Sch Qty"]||0),0);
-  let totalDisp = data.reduce((a,b)=>a+Number(b["Disp Qty"]||0),0);
-
-  div.innerHTML = `
-    <h2>Overall Summary</h2>
-    <h3>Total Scheduled: ${totalSch}</h3>
-    <h3>Total Dispatched: ${totalDisp}</h3>
-  `;
-
-  document.getElementById("pages").appendChild(div);
-  pages.push(div);
 }
 
 // TABLE
@@ -232,28 +183,27 @@ function createTable(rows) {
   let html = `<table>
     <tr>
       <th>SI NO</th>
-      <th>Customer</th>
-      <th>Item</th>
-      <th>Project</th>
-      <th>Manager</th>
-      <th>Sch Qty</th>
-      <th>Disp Qty</th>
-      <th>Remarks</th>
+      <th>ITEM</th>
+      <th>MANAGER</th>
+      <th>SCH</th>
+      <th>DISP</th>
+      <th>STATUS</th>
     </tr>`;
 
   rows.forEach(r => {
-    let remark = (r["Remarks"] || "").toLowerCase();
-    let cls = (remark === "dispatched" || remark === "ready") ? "green" : "red";
+    let remark = (r["REMARKS"] || "").toLowerCase();
+
+    let cls = (remark === "ready" || remark === "production" || remark === "welding")
+      ? "row-green"
+      : "row-red";
 
     html += `<tr class="${cls}">
       <td>${r["SI NO"]}</td>
-      <td>${r["Customer"]}</td>
-      <td>${r["Item Name"]}</td>
-      <td>${r["Project"]}</td>
-      <td>${r["Program Manager"]}</td>
-      <td>${r["Sch Qty"]}</td>
-      <td>${r["Disp Qty"]}</td>
-      <td>${r["Remarks"]}</td>
+      <td>${r["ITEM NAME"]}</td>
+      <td>${r["PROJECT PROGRAM MANAGER"]}</td>
+      <td>${r["SCH QTY"]}</td>
+      <td>${r["DISP QTY"]}</td>
+      <td>${r["REMARKS"]}</td>
     </tr>`;
   });
 
@@ -261,11 +211,28 @@ function createTable(rows) {
   return html;
 }
 
-// MANUAL CLICK
-function showCustomer(name) {
-  pages.forEach(p => p.classList.remove("active"));
-  let index = customers.indexOf(name);
-  pages[index].classList.add("active");
+// CHART
+function createChart() {
+  let ctx = document.getElementById("chart");
+
+  let grouped = {};
+
+  data.forEach(r => {
+    let c = r["CUSTOMER"];
+    let disp = Number(r["DISP QTY"] || 0);
+    grouped[c] = (grouped[c] || 0) + disp;
+  });
+
+  new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels: Object.keys(grouped),
+      datasets: [{
+        label: 'Dispatch Qty',
+        data: Object.values(grouped)
+      }]
+    }
+  });
 }
 
 // SLIDESHOW
@@ -275,12 +242,12 @@ function startSlideshow() {
     pages[currentPage].classList.add("active");
 
     currentPage = (currentPage + 1) % pages.length;
-  }, 5000);
+  }, 4000);
 }
 
 // CLOCK
 setInterval(() => {
-  document.getElementById("date").innerText = new Date().toLocaleString();
+  document.getElementById("clock").innerText = new Date().toLocaleString();
 }, 1000);
 
 </script>
