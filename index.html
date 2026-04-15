@@ -1,43 +1,70 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>AI Dispatch Dashboard</title>
+  <title>Dispatch Dashboard</title>
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
     body { margin:0; font-family:Arial; background:#0b0f1a; color:white; }
 
-    .header { display:flex; justify-content:space-between; padding:10px 20px; background:#111827; font-size:20px; }
-
-    .tiles { display:grid; grid-template-columns:repeat(4,1fr); gap:10px; padding:10px; }
-
-    .tile { padding:20px; border-radius:10px; text-align:center; }
-    .blue{background:#1e3a8a;} .green{background:#065f46;}
-    .orange{background:#92400e;} .red{background:#7f1d1d;}
-
-    .controls{text-align:center;padding:10px;}
-    .controls button, .controls input {
-      padding:8px; margin:5px; border:none; border-radius:6px;
+    .header {
+      display:flex; justify-content:space-between;
+      padding:10px 20px; background:#111827; font-size:20px;
     }
 
-    #aiPanel{background:#111827;margin:10px;padding:10px;}
+    .tiles {
+      display:grid; grid-template-columns:repeat(4,1fr);
+      gap:10px; padding:10px;
+    }
 
-    .page{display:none;padding:15px;}
-    .active{display:block;}
+    .tile { padding:20px; border-radius:10px; text-align:center; }
+    .blue{background:#1e3a8a;}
+    .green{background:#065f46;}
+    .orange{background:#92400e;}
+    .red{background:#7f1d1d;}
 
-    table{width:100%;border-collapse:collapse;font-size:13px;}
-    th,td{border:1px solid #374151;padding:6px;text-align:center;}
-    th{background:#1f2937;}
+    .controls { text-align:center; padding:10px; }
 
-    .ok{background:#065f46;}
-    .bad{background:#7f1d1d;animation:blink 1s infinite;}
+    .controls button, .controls input {
+      padding:8px; margin:5px;
+      border:none; border-radius:6px;
+    }
 
-    @keyframes blink{50%{opacity:0.4;}}
+    .page { display:none; padding:15px; }
+    .active { display:block; }
 
-    /* 📉 SLIM TREND CHART */
-    .trend-container{
+    table {
+      width:100%; border-collapse:collapse;
+      font-size:13px;
+    }
+
+    th,td {
+      border:1px solid #374151;
+      padding:6px; text-align:center;
+    }
+
+    th { background:#1f2937; }
+
+    .ok { background:#065f46; }
+    .bad { background:#7f1d1d; animation:blink 1s infinite; }
+
+    @keyframes blink { 50% { opacity:0.4; } }
+
+    /* 📊 CHART LAYOUT */
+    .chart-row {
+      display:flex;
+      gap:20px;
+      align-items:center;
+    }
+
+    .chart-box {
+      flex:1;
       height:180px;
-      padding:10px;
+    }
+
+    canvas {
+      width:100% !important;
+      height:100% !important;
     }
   </style>
 </head>
@@ -45,7 +72,7 @@
 <body>
 
 <div class="header">
-  <div>🤖 AI DISPATCH DASHBOARD</div>
+  <div>📊 DISPATCH DASHBOARD</div>
   <div id="clock"></div>
 </div>
 
@@ -65,11 +92,6 @@
   📅 <input type="date" id="datePicker" onchange="applyDateFilter()">
 </div>
 
-<div id="aiPanel">
-  <h3>🤖 AI Insights</h3>
-  <div id="insights"></div>
-</div>
-
 <div id="pages"></div>
 
 <script>
@@ -78,8 +100,7 @@ const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JF
 
 let data=[], filtered=[], headers=[];
 let pages=[], current=0, timer;
-let selectedDate=null;
-let trendChart;
+let trendChart, barChart;
 
 // CSV parser
 function parseCSV(text){
@@ -116,7 +137,7 @@ function load(){
   });
 }
 
-// 📅 Date filter
+// Date filter
 function applyDateFilter(){
   let val=document.getElementById("datePicker").value;
 
@@ -130,15 +151,14 @@ function applyDateFilter(){
   build();
 }
 
-// Build UI
+// Build
 function build(){
   document.getElementById("pages").innerHTML="";
   pages=[];
 
   updateTiles();
   createSlides();
-  createTrendSlide();
-  generateInsights();
+  createChartSlide();
 
   show(0);
 }
@@ -159,7 +179,7 @@ function updateTiles(){
     "Ach %: "+(sch?((disp/sch)*100).toFixed(1):0)+"%";
 }
 
-// Slides
+// Customer slides
 function createSlides(){
   let group={};
 
@@ -194,76 +214,61 @@ function table(rows){
   return html+"</table>";
 }
 
-// 📊 TREND SLIDE
-function createTrendSlide(){
+// 📊 FINAL SLIDE (TREND + BAR)
+function createChartSlide(){
 
-  let trendDiv=document.createElement("div");
-  trendDiv.className="page";
+  let div=document.createElement("div");
+  div.className="page";
 
-  trendDiv.innerHTML=`
-    <h2>📊 Monthly Dispatch Trend</h2>
-    <div class="trend-container">
-      <canvas id="trendChart"></canvas>
+  div.innerHTML=`
+    <h2>📊 Overall Analysis</h2>
+    <div class="chart-row">
+      <div class="chart-box"><canvas id="trendChart"></canvas></div>
+      <div class="chart-box"><canvas id="barChart"></canvas></div>
     </div>
   `;
 
-  document.getElementById("pages").appendChild(trendDiv);
-  pages.push(trendDiv);
+  pages.push(div);
+  document.getElementById("pages").appendChild(div);
 
-  // Prepare trend data
+  // TREND DATA
   let trend={};
-
   data.forEach(r=>{
     let d=formatDate(r["SCHEDULE DATE"]);
     let day=d.split("/")[0];
-
-    if(!trend[day]) trend[day]=0;
-    trend[day]+=+r["DISP QTY"]||0;
+    trend[day]=(trend[day]||0)+(+r["DISP QTY"]||0);
   });
 
   let labels=Object.keys(trend).sort((a,b)=>a-b);
   let values=labels.map(d=>trend[d]);
 
   if(trendChart) trendChart.destroy();
-
   trendChart=new Chart(document.getElementById("trendChart"),{
     type:'line',
+    data:{labels:labels,datasets:[{data:values,tension:0.3}]},
+    options:{plugins:{legend:{display:false}}}
+  });
+
+  // BAR DATA (customer wise)
+  let grp={};
+  data.forEach(r=>{
+    let c=r["CUSTOMER"];
+    grp[c]=(grp[c]||0)+(+r["DISP QTY"]||0);
+  });
+
+  if(barChart) barChart.destroy();
+  barChart=new Chart(document.getElementById("barChart"),{
+    type:'bar',
     data:{
-      labels:labels,
-      datasets:[{
-        label:'Daily Dispatch',
-        data:values,
-        tension:0.3
-      }]
+      labels:Object.keys(grp),
+      datasets:[{data:Object.values(grp)}]
     },
-    options:{
-      plugins:{legend:{display:false}},
-      scales:{
-        x:{ticks:{color:'white'}},
-        y:{ticks:{color:'white'}}
-      }
-    }
+    options:{plugins:{legend:{display:false}}}
   });
-}
-
-// AI Insights
-function generateInsights(){
-  let pending=0;
-
-  filtered.forEach(r=>{
-    if(+r["DISP QTY"] < +r["SCH QTY"])
-      pending+=(+r["SCH QTY"]-+r["DISP QTY"]);
-  });
-
-  document.getElementById("insights").innerHTML=
-    `📦 Total Pending: <b>${pending}</b>`;
 }
 
 // Controls
-function show(i){
-  pages.forEach(p=>p.classList.remove("active"));
-  if(pages[i]) pages[i].classList.add("active");
-}
+function show(i){pages.forEach(p=>p.classList.remove("active")); if(pages[i]) pages[i].classList.add("active");}
 function nextSlide(){current=(current+1)%pages.length;show(current);}
 function prevSlide(){current=(current-1+pages.length)%pages.length;show(current);}
 function playSlide(){clearInterval(timer);timer=setInterval(nextSlide,4000);}
