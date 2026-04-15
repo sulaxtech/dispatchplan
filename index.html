@@ -72,7 +72,6 @@
 </div>
 
 <div id="pages"></div>
-
 <canvas id="chartPage"></canvas>
 
 <script>
@@ -84,39 +83,54 @@ let customers = [];
 let pages = [];
 let currentPage = 0;
 
-// CSV → JSON
+// ✅ SAFE CSV PARSER
 function parseCSV(text) {
-  const rows = text.split("\n").map(r => r.split(","));
+  const rows = text.trim().split("\n").map(r => r.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
   const headers = rows[0];
 
   return rows.slice(1).map(r => {
     let obj = {};
-    headers.forEach((h, i) => obj[h.trim()] = r[i]);
+    headers.forEach((h, i) => obj[h.trim()] = r[i]?.replace(/"/g, '').trim());
     return obj;
   });
 }
 
+// ✅ DATE FORMAT FIX
+function formatDate(d) {
+  let date = new Date(d);
+  if (isNaN(date)) return d; // if already string
+
+  let day = String(date.getDate()).padStart(2, '0');
+  let month = String(date.getMonth() + 1).padStart(2, '0');
+  let year = date.getFullYear();
+
+  return `${day}-${month}-${year}`;
+}
+
+// FETCH DATA
 fetch(sheetURL)
   .then(res => res.text())
   .then(csv => {
     data = parseCSV(csv);
+    console.log("DATA:", data); // debug
     init();
-  });
+  })
+  .catch(err => console.error("Error loading sheet:", err));
 
+// INIT
 function init() {
   customers = [...new Set(data.map(r => r["Customer"]))];
 
   createButtons();
   createCustomerPages();
   createFailurePage();
-  createNPDPage();
   createChartPage();
   createOverallPage();
 
   startSlideshow();
 }
 
-// Buttons
+// BUTTONS
 function createButtons() {
   const container = document.getElementById("customerButtons");
 
@@ -128,16 +142,17 @@ function createButtons() {
   });
 }
 
-// Customer Pages
+// CUSTOMER PAGES
 function createCustomerPages() {
-  const today = new Date().toISOString().split('T')[0];
+  const today = formatDate(new Date());
 
   customers.forEach(c => {
     let div = document.createElement("div");
     div.className = "page";
 
     let rows = data.filter(r =>
-      r["Customer"] == c && r["Date"] == today
+      r["Customer"] == c &&
+      formatDate(r["Date"]) == today
     );
 
     div.innerHTML = `<h2>${c} - Today Dispatch</h2>` + createTable(rows);
@@ -147,17 +162,17 @@ function createCustomerPages() {
   });
 }
 
-// Yesterday Failure
+// YESTERDAY FAILURE
 function createFailurePage() {
   let div = document.createElement("div");
   div.className = "page";
 
   let d = new Date();
   d.setDate(d.getDate() - 1);
-  let y = d.toISOString().split('T')[0];
+  let y = formatDate(d);
 
   let rows = data.filter(r =>
-    r["Date"] == y &&
+    formatDate(r["Date"]) == y &&
     Number(r["Sch Qty"]) > Number(r["Disp Qty"])
   );
 
@@ -167,20 +182,7 @@ function createFailurePage() {
   pages.push(div);
 }
 
-// NPD Page
-function createNPDPage() {
-  let div = document.createElement("div");
-  div.className = "page";
-
-  let rows = data.filter(r => r["Type"] == "NPD");
-
-  div.innerHTML = `<h2>NPD Dispatch Status</h2>` + createTable(rows);
-
-  document.getElementById("pages").appendChild(div);
-  pages.push(div);
-}
-
-// Chart Page
+// CHART
 function createChartPage() {
   let ctx = document.getElementById("chartPage");
 
@@ -188,7 +190,11 @@ function createChartPage() {
 
   data.forEach(r => {
     let c = r["Customer"];
-    grouped[c] = (grouped[c] || 0) + Number(r["Disp Qty"] || 0);
+    let disp = Number(r["Disp Qty"] || 0);
+
+    if (r["Remarks"] === "Dispatched") {
+      grouped[c] = (grouped[c] || 0) + disp;
+    }
   });
 
   new Chart(ctx, {
@@ -196,14 +202,14 @@ function createChartPage() {
     data: {
       labels: Object.keys(grouped),
       datasets: [{
-        label: 'Dispatch Qty',
+        label: 'Dispatched Qty',
         data: Object.values(grouped)
       }]
     }
   });
 }
 
-// Overall Page
+// OVERALL
 function createOverallPage() {
   let div = document.createElement("div");
   div.className = "page";
@@ -221,7 +227,7 @@ function createOverallPage() {
   pages.push(div);
 }
 
-// Table
+// TABLE
 function createTable(rows) {
   let html = `<table>
     <tr>
@@ -236,7 +242,8 @@ function createTable(rows) {
     </tr>`;
 
   rows.forEach(r => {
-    let cls = (r["Remarks"] == "Dispatched" || r["Remarks"] == "Ready") ? "green" : "red";
+    let remark = (r["Remarks"] || "").toLowerCase();
+    let cls = (remark === "dispatched" || remark === "ready") ? "green" : "red";
 
     html += `<tr class="${cls}">
       <td>${r["SI NO"]}</td>
@@ -254,24 +261,24 @@ function createTable(rows) {
   return html;
 }
 
-// Manual customer click
+// MANUAL CLICK
 function showCustomer(name) {
   pages.forEach(p => p.classList.remove("active"));
   let index = customers.indexOf(name);
   pages[index].classList.add("active");
 }
 
-// Slideshow
+// SLIDESHOW
 function startSlideshow() {
   setInterval(() => {
     pages.forEach(p => p.classList.remove("active"));
     pages[currentPage].classList.add("active");
 
     currentPage = (currentPage + 1) % pages.length;
-  }, 6000);
+  }, 5000);
 }
 
-// Live clock
+// CLOCK
 setInterval(() => {
   document.getElementById("date").innerText = new Date().toLocaleString();
 }, 1000);
