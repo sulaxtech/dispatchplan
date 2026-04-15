@@ -2,7 +2,6 @@
 <html>
 <head>
   <title>Dispatch Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
     body {
@@ -19,7 +18,7 @@
       background: #111827;
     }
 
-    .tile-bar {
+    .tiles {
       display: flex;
       gap: 10px;
       padding: 10px;
@@ -35,8 +34,8 @@
 
     .blue { background: #1e3a8a; }
     .green { background: #065f46; }
-    .red { background: #7f1d1d; }
     .orange { background: #92400e; }
+    .red { background: #7f1d1d; }
 
     .page {
       display: none;
@@ -75,11 +74,11 @@
   <div id="clock"></div>
 </div>
 
-<div class="tile-bar">
+<div class="tiles">
   <div class="tile blue" id="sch">Scheduled: 0</div>
   <div class="tile green" id="disp">Dispatched: 0</div>
   <div class="tile orange" id="pending">Pending: 0</div>
-  <div class="tile red" id="ach">Ach %: 0</div>
+  <div class="tile red" id="ach">Ach %: 0%</div>
 </div>
 
 <div id="pages"></div>
@@ -92,37 +91,48 @@ let data = [];
 let pages = [];
 let currentPage = 0;
 
-// SAFE CSV
+// ✅ FIXED CSV PARSER (AUTO CLEAN HEADERS)
 function parseCSV(text) {
-  const rows = text.trim().split("\n").map(r => r.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/));
-  const headers = rows[0];
+  const rows = text.trim().split("\n").map(r =>
+    r.split(/,(?=(?:(?:[^"]*"){2})*[^"]*$)/)
+  );
+
+  const headers = rows[0].map(h =>
+    h.replace(/"/g, '').trim().toUpperCase()
+  );
 
   return rows.slice(1).map(r => {
     let obj = {};
-    headers.forEach((h, i) => obj[h.trim()] = r[i]?.replace(/"/g, '').trim());
+    headers.forEach((h, i) => {
+      obj[h] = r[i]?.replace(/"/g, '').trim();
+    });
     return obj;
   });
 }
 
-// FETCH DATA
+// FETCH
 fetch(sheetURL)
   .then(res => res.text())
   .then(csv => {
     data = parseCSV(csv);
-    console.log("Loaded:", data);
+    console.log("DATA:", data);
     init();
   })
   .catch(err => console.error(err));
 
 // INIT
 function init() {
+
+  // remove empty rows
+  data = data.filter(r => r["CUSTOMER"]);
+
   if (!data.length) {
     document.body.innerHTML += "<h2 style='color:red;text-align:center'>No Data Found</h2>";
     return;
   }
 
   updateTiles();
-  createCustomerSlides();
+  createSlides();
   startSlideshow();
 }
 
@@ -135,19 +145,22 @@ function updateTiles() {
     disp += Number(r["DISP QTY"] || 0);
   });
 
+  let pending = sch - disp;
+  let ach = sch ? ((disp / sch) * 100).toFixed(1) : 0;
+
   document.getElementById("sch").innerText = "Scheduled: " + sch;
   document.getElementById("disp").innerText = "Dispatched: " + disp;
-  document.getElementById("pending").innerText = "Pending: " + (sch - disp);
-  document.getElementById("ach").innerText = "Ach %: " + ((disp/sch*100)||0).toFixed(1);
+  document.getElementById("pending").innerText = "Pending: " + pending;
+  document.getElementById("ach").innerText = "Ach %: " + ach + "%";
 }
 
-// GROUP BY CUSTOMER
-function createCustomerSlides() {
+// GROUP + SLIDES
+function createSlides() {
 
   let grouped = {};
 
   data.forEach(r => {
-    let c = r["CUSTOMER"] || "Unknown";
+    let c = r["CUSTOMER"].trim();
 
     if (!grouped[c]) grouped[c] = [];
     grouped[c].push(r);
@@ -185,12 +198,12 @@ function createTable(rows) {
       : "bad";
 
     html += `<tr class="${cls}">
-      <td>${r["SI NO"]}</td>
-      <td>${r["ITEM NAME"]}</td>
-      <td>${r["PROJECT PROGRAM MANAGER"]}</td>
-      <td>${r["SCH QTY"]}</td>
-      <td>${r["DISP QTY"]}</td>
-      <td>${r["REMARKS"]}</td>
+      <td>${r["SI NO"] || "-"}</td>
+      <td>${r["ITEM NAME"] || "-"}</td>
+      <td>${r["PROJECT PROGRAM MANAGER"] || "-"}</td>
+      <td>${r["SCH QTY"] || 0}</td>
+      <td>${r["DISP QTY"] || 0}</td>
+      <td>${r["REMARKS"] || "-"}</td>
     </tr>`;
   });
 
