@@ -1,84 +1,81 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <title>Dispatch Dashboard</title>
-  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<title>Industry Dispatch Dashboard</title>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
-  <style>
-    body { margin:0; font-family:Arial; background:#0b0f1a; color:white; }
+<style>
 
-    .header {
-      display:flex; justify-content:space-between;
-      padding:10px 20px; background:#111827; font-size:20px;
-    }
+body { margin:0; font-family:Arial; background:#0b0f1a; color:white; }
 
-    .tiles {
-      display:grid; grid-template-columns:repeat(4,1fr);
-      gap:10px; padding:10px;
-    }
+.header {
+  display:flex; justify-content:space-between;
+  padding:10px 20px; background:#111827;
+}
 
-    .tile {
-      padding:20px;
-      border-radius:12px;
-      text-align:center;
-      background:linear-gradient(135deg,#1f2937,#111827);
-      box-shadow:0 4px 10px rgba(0,0,0,0.5);
-    }
+.tiles {
+  display:grid; grid-template-columns:repeat(5,1fr);
+  gap:10px; padding:10px;
+}
 
-    .controls { text-align:center; padding:10px; }
+.tile {
+  padding:15px;
+  border-radius:10px;
+  text-align:center;
+  background:#1f2937;
+}
 
-    .controls button, .controls input {
-      padding:8px; margin:5px;
-      border:none; border-radius:6px;
-    }
+.good { border-left:5px solid #22c55e; }
+.warn { border-left:5px solid #f59e0b; }
+.bad  { border-left:5px solid #ef4444; }
 
-    .page { display:none; padding:15px; }
-    .active { display:block; }
+.controls { text-align:center; padding:10px; }
 
-    table {
-      width:100%; border-collapse:collapse;
-      font-size:13px;
-    }
+.page { display:none; padding:10px; }
+.active { display:block; }
 
-    th,td {
-      border:1px solid #374151;
-      padding:6px; text-align:center;
-    }
+table { width:100%; border-collapse:collapse; font-size:12px; }
 
-    th { background:#1f2937; }
+th,td {
+  border:1px solid #374151;
+  padding:5px;
+  text-align:center;
+}
 
-    .ok { background:#065f46; }
-    .bad { background:#7f1d1d; animation:blink 1s infinite; }
+th { background:#1f2937; }
 
-    @keyframes blink { 50% { opacity:0.4; } }
+.ok { background:#065f46; }
 
-    /* Charts */
-    .chart-row {
-      display:flex;
-      gap:20px;
-    }
+.delay-low { background:#78350f; }
+.delay-high { background:#7f1d1d; animation:blink 1s infinite; }
 
-    .chart-box {
-      flex:1;
-      height:220px;
-      background:#111827;
-      padding:10px;
-      border-radius:12px;
-    }
+@keyframes blink { 50%{opacity:0.4;} }
 
-    canvas {
-      width:100% !important;
-      height:100% !important;
-      image-rendering: crisp-edges;
-    }
+/* Progress bar */
+.bar {
+  height:6px;
+  background:#374151;
+  border-radius:5px;
+}
+.bar span {
+  display:block;
+  height:100%;
+  background:#22c55e;
+}
 
-  </style>
+/* Charts */
+.chart-row { display:flex; gap:15px; }
+.chart-box { flex:1; height:220px; background:#111827; padding:10px; }
+
+canvas { width:100%!important; height:100%!important; }
+
+</style>
 </head>
 
 <body>
 
 <div class="header">
-  <div>📊 DISPATCH DASHBOARD</div>
+  <div>🏭 INDUSTRY DISPATCH DASHBOARD</div>
   <div id="clock"></div>
 </div>
 
@@ -87,13 +84,10 @@
   <div class="tile" id="disp"></div>
   <div class="tile" id="pending"></div>
   <div class="tile" id="ach"></div>
+  <div class="tile" id="top"></div>
 </div>
 
 <div class="controls">
-  <button onclick="prevSlide()">⏮</button>
-  <button onclick="pauseSlide()">⏸</button>
-  <button onclick="playSlide()">▶</button>
-  <button onclick="nextSlide()">⏭</button>
   📅 <input type="date" id="datePicker" onchange="applyDateFilter()">
 </div>
 
@@ -101,43 +95,29 @@
 
 <script>
 
-/* 🔥 FIX BLUR */
 Chart.defaults.devicePixelRatio = window.devicePixelRatio || 2;
 
 const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JFJP5dxHBSQ8-4m45W47nxwwLUBDs1INcHO6jswUCnk3kp57AP3tQq19qccF/pub?output=csv";
 
 let data=[], filtered=[], headers=[];
-let pages=[], current=0, timer;
-let trendChart, barChart;
+let pages=[], current=0;
 
-/* CSV */
-function parseCSV(text){
-  const rows=[]; let row=[],val='',q=false;
-  for(let c of text){
-    if(c=='"') q=!q;
-    else if(c==','&&!q){row.push(val);val=''}
-    else if(c=='\n'&&!q){row.push(val);rows.push(row);row=[];val=''}
-    else val+=c;
-  }
-  if(val) row.push(val);
-  if(row.length) rows.push(row);
-
-  headers=rows[0].map(h=>h.trim());
-
+function parseCSV(t){
+  let rows=t.trim().split("\n").map(r=>r.split(","));
+  headers=rows[0];
   return rows.slice(1).map(r=>{
-    let o={}; headers.forEach((h,i)=>o[h]=(r[i]||'').trim());
+    let o={};
+    headers.forEach((h,i)=>o[h]=r[i]);
     return o;
   });
 }
 
-/* DATE */
 function formatDate(d){
-  let date=new Date(d);
-  if(isNaN(date)) return (d||"").replace(/-/g,'/');
-  return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
+  let dt=new Date(d);
+  if(isNaN(dt)) return d;
+  return `${String(dt.getDate()).padStart(2,'0')}/${String(dt.getMonth()+1).padStart(2,'0')}/${dt.getFullYear()}`;
 }
 
-/* LOAD */
 function load(){
   fetch(url).then(r=>r.text()).then(t=>{
     data=parseCSV(t);
@@ -145,180 +125,175 @@ function load(){
   });
 }
 
-/* FILTER */
 function applyDateFilter(){
   let val=document.getElementById("datePicker").value;
-
   if(!val) filtered=data;
   else{
     let sel=formatDate(val);
     filtered=data.filter(r=>formatDate(r["SCHEDULE DATE"])===sel);
   }
-
   build();
 }
 
-/* BUILD */
-function build(){
-  document.getElementById("pages").innerHTML="";
-  pages=[];
-
-  updateTiles();
-  createSlides();
-  createChartSlide();
-
-  show(0);
-}
-
-/* KPI */
+/* KPI + TOP */
 function updateTiles(){
+
   let sch=0,disp=0;
+  let grp={},target={};
 
   filtered.forEach(r=>{
+    let c=r["CUSTOMER"];
     sch+=+r["SCH QTY"]||0;
     disp+=+r["DISP QTY"]||0;
+
+    grp[c]=(grp[c]||0)+(+r["DISP QTY"]||0);
+    target[c]=(target[c]||0)+(+r["SCH QTY"]||0);
   });
 
-  document.getElementById("sch").innerText="Scheduled: "+sch;
-  document.getElementById("disp").innerText="Dispatched: "+disp;
-  document.getElementById("pending").innerText="Pending: "+(sch-disp);
-  document.getElementById("ach").innerText=
-    "Ach %: "+(sch?((disp/sch)*100).toFixed(1):0)+"%";
-}
+  let ach=sch?((disp/sch)*100).toFixed(1):0;
 
-/* SLIDES */
-function createSlides(){
-  let group={};
+  document.getElementById("sch").innerText="SCH: "+sch;
+  document.getElementById("disp").innerText="DISP: "+disp;
+  document.getElementById("pending").innerText="PEND: "+(sch-disp);
+  document.getElementById("ach").innerText="ACH: "+ach+"%";
 
-  filtered.forEach(r=>{
-    let c=r["CUSTOMER"]||"Unknown";
-    if(!group[c]) group[c]=[];
-    group[c].push(r);
+  // Top performer
+  let best="",rate=0;
+  Object.keys(grp).forEach(c=>{
+    let r=(grp[c]/target[c])*100;
+    if(r>rate){rate=r;best=c;}
   });
 
-  for(let c in group){
-    let div=document.createElement("div");
-    div.className="page";
-    div.innerHTML=`<h2>${c}</h2>`+table(group[c]);
-    pages.push(div);
-    document.getElementById("pages").appendChild(div);
-  }
+  document.getElementById("top").innerText="🏆 "+best;
 }
 
 /* TABLE */
 function table(rows){
+
   let html="<table><tr>";
   headers.forEach(h=>html+=`<th>${h}</th>`);
-  html+="</tr>";
+  html+="<th>Progress</th></tr>";
 
   rows.forEach(r=>{
-    let cls=(+r["DISP QTY"] < +r["SCH QTY"])?"bad":"ok";
+
+    let sch=+r["SCH QTY"]||0;
+    let disp=+r["DISP QTY"]||0;
+    let percent=sch?(disp/sch)*100:0;
+
+    let cls="ok";
+    if(disp<sch && percent<50) cls="delay-high";
+    else if(disp<sch) cls="delay-low";
+
     html+=`<tr class="${cls}">`;
-    headers.forEach(h=>html+=`<td>${r[h]||"-"}</td>`);
+
+    headers.forEach(h=>html+=`<td>${r[h]}</td>`);
+
+    html+=`<td>
+      <div class="bar"><span style="width:${percent}%"></span></div>
+      ${percent.toFixed(0)}%
+    </td>`;
+
     html+="</tr>";
   });
 
   return html+"</table>";
 }
 
-/* ⭐ PREMIUM CHART */
+/* SLIDES */
+function createSlides(){
+  let grp={};
+
+  filtered.forEach(r=>{
+    let c=r["CUSTOMER"];
+    if(!grp[c]) grp[c]=[];
+    grp[c].push(r);
+  });
+
+  for(let c in grp){
+    let d=document.createElement("div");
+    d.className="page";
+    d.innerHTML=`<h3>${c}</h3>`+table(grp[c]);
+    pages.push(d);
+    document.getElementById("pages").appendChild(d);
+  }
+}
+
+/* CHART */
 function createChartSlide(){
 
   let div=document.createElement("div");
   div.className="page";
 
   div.innerHTML=`
-    <h2 style="text-align:center;">📊 Overall Analysis</h2>
-    <div class="chart-row">
-      <div class="chart-box"><canvas id="trendChart"></canvas></div>
-      <div class="chart-box"><canvas id="barChart"></canvas></div>
-    </div>
-  `;
+  <h3>📊 Analysis</h3>
+  <div class="chart-row">
+    <div class="chart-box"><canvas id="trend"></canvas></div>
+    <div class="chart-box"><canvas id="bar"></canvas></div>
+  </div>`;
 
   pages.push(div);
   document.getElementById("pages").appendChild(div);
 
-  /* TREND */
-  let trend={};
-  data.forEach(r=>{
-    let d=formatDate(r["SCHEDULE DATE"]);
-    let day=d.split("/")[0];
-    trend[day]=(trend[day]||0)+(+r["DISP QTY"]||0);
-  });
-
-  let labels=Object.keys(trend).sort((a,b)=>a-b);
-  let values=labels.map(d=>trend[d]);
-
-  if(trendChart) trendChart.destroy();
-
-  trendChart=new Chart(document.getElementById("trendChart"),{
-    type:'line',
-    data:{
-      labels:labels,
-      datasets:[{
-        data:values,
-        borderColor:"#22c55e",
-        backgroundColor:"rgba(34,197,94,0.2)",
-        fill:true,
-        tension:0.4,
-        pointRadius:4
-      }]
-    },
-    options:{
-      plugins:{legend:{display:false}},
-      scales:{
-        x:{ticks:{color:"white"}},
-        y:{ticks:{color:"white"}}
-      }
-    }
-  });
-
-  /* BAR */
-  let grp={}, target={};
+  let trend={},grp={},target={};
 
   data.forEach(r=>{
+    let d=formatDate(r["SCHEDULE DATE"]).split("/")[0];
+    trend[d]=(trend[d]||0)+(+r["DISP QTY"]||0);
+
     let c=r["CUSTOMER"];
     grp[c]=(grp[c]||0)+(+r["DISP QTY"]||0);
     target[c]=(target[c]||0)+(+r["SCH QTY"]||0);
   });
 
-  let customers=Object.keys(grp);
+  new Chart(document.getElementById("trend"),{
+    type:'line',
+    data:{labels:Object.keys(trend),datasets:[{data:Object.values(trend),borderColor:"#22c55e",fill:true}]}
+  });
 
-  if(barChart) barChart.destroy();
+  let customers=Object.keys(target).sort((a,b)=>target[b]-target[a]).slice(0,5);
 
-  barChart=new Chart(document.getElementById("barChart"),{
+  new Chart(document.getElementById("bar"),{
     type:'bar',
     data:{
       labels:customers,
-      datasets:[{
-        data:customers.map(c=>grp[c]),
-        backgroundColor:customers.map(c=>grp[c]>=target[c]?"#22c55e":"#ef4444"),
-        borderRadius:10
-      }]
-    },
-    options:{
-      plugins:{legend:{display:false}},
-      scales:{
-        x:{ticks:{color:"white"}},
-        y:{ticks:{color:"white"}}
-      }
+      datasets:[
+        {label:"SCH",data:customers.map(c=>target[c])},
+        {label:"DISP",data:customers.map(c=>grp[c])}
+      ]
     }
   });
 }
 
-/* CONTROLS */
-function show(i){pages.forEach(p=>p.classList.remove("active")); if(pages[i]) pages[i].classList.add("active");}
-function nextSlide(){current=(current+1)%pages.length;show(current);}
-function prevSlide(){current=(current-1+pages.length)%pages.length;show(current);}
-function playSlide(){clearInterval(timer);timer=setInterval(nextSlide,4000);}
-function pauseSlide(){clearInterval(timer);}
+/* BUILD */
+function build(){
+  document.getElementById("pages").innerHTML="";
+  pages=[];
+  updateTiles();
+  createSlides();
+  createChartSlide();
+  show(0);
+}
+
+/* SLIDES */
+function show(i){
+  pages.forEach(p=>p.classList.remove("active"));
+  if(pages[i]) pages[i].classList.add("active");
+}
+
+setInterval(()=>{
+  current=(current+1)%pages.length;
+  show(current);
+},4000);
 
 /* CLOCK */
-setInterval(()=>{document.getElementById("clock").innerText=new Date().toLocaleString();},1000);
+setInterval(()=>{
+  document.getElementById("clock").innerText=new Date().toLocaleString();
+},1000);
 
-/* START */
+/* AUTO REFRESH */
+setInterval(load,120000);
+
 load();
-playSlide();
 
 </script>
 
