@@ -99,36 +99,7 @@
 
 <script>
 
-/* 🔥 FIX BLUR */
 Chart.defaults.devicePixelRatio = window.devicePixelRatio || 2;
-
-/* 🎯 VALUE LABEL PLUGIN */
-const valueLabelPlugin = {
-  id: 'valueLabel',
-  afterDatasetsDraw(chart) {
-    const {ctx} = chart;
-    ctx.save();
-
-    chart.data.labels.forEach((label, i) => {
-      let dispMeta = chart.getDatasetMeta(1);
-      let disp = chart.data.datasets[1].data[i];
-      let sch = chart.data.datasets[0].data[i];
-
-      let percent = sch ? ((disp / sch) * 100).toFixed(0) : 0;
-
-      let x = dispMeta.data[i].x;
-      let y = dispMeta.data[i].y;
-
-      ctx.fillStyle = percent >= 100 ? "#22c55e" : "#ef4444";
-      ctx.font = "bold 12px Arial";
-      ctx.textAlign = "center";
-
-      ctx.fillText(percent + "%", x, y - 10);
-    });
-
-    ctx.restore();
-  }
-};
 
 const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JFJP5dxHBSQ8-4m45W47nxwwLUBDs1INcHO6jswUCnk3kp57AP3tQq19qccF/pub?output=csv";
 
@@ -136,7 +107,6 @@ let data=[], filtered=[], headers=[];
 let pages=[], current=0, timer;
 let trendChart, barChart;
 
-/* CSV */
 function parseCSV(text){
   const rows=[]; let row=[],val='',q=false;
   for(let c of text){
@@ -156,14 +126,12 @@ function parseCSV(text){
   });
 }
 
-/* DATE */
 function formatDate(d){
   let date=new Date(d);
   if(isNaN(date)) return (d||"").replace(/-/g,'/');
   return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
 }
 
-/* LOAD */
 function load(){
   fetch(url).then(r=>r.text()).then(t=>{
     data=parseCSV(t);
@@ -171,7 +139,6 @@ function load(){
   });
 }
 
-/* FILTER */
 function applyDateFilter(){
   let val=document.getElementById("datePicker").value;
 
@@ -184,7 +151,6 @@ function applyDateFilter(){
   build();
 }
 
-/* BUILD */
 function build(){
   document.getElementById("pages").innerHTML="";
   pages=[];
@@ -196,13 +162,12 @@ function build(){
   show(0);
 }
 
-/* KPI */
 function updateTiles(){
   let sch=0,disp=0;
 
   filtered.forEach(r=>{
     sch+=+r["SCH QTY"]||0;
-    disp+=+r["DISP QTY"]||0;
+    disp+=+(r["DES QTY"] || r["DISP QTY"])||0;
   });
 
   document.getElementById("sch").innerText="Scheduled: "+sch;
@@ -212,7 +177,6 @@ function updateTiles(){
     "Ach %: "+(sch?((disp/sch)*100).toFixed(1):0)+"%";
 }
 
-/* SLIDES */
 function createSlides(){
   let group={};
 
@@ -231,14 +195,19 @@ function createSlides(){
   }
 }
 
-/* TABLE */
 function table(rows){
   let html="<table><tr>";
   headers.forEach(h=>html+=`<th>${h}</th>`);
   html+="</tr>";
 
   rows.forEach(r=>{
-    let cls=(+r["DISP QTY"] < +r["SCH QTY"])?"bad":"ok";
+
+    // ✅ FIXED LOGIC
+    let sch = Number(r["SCH QTY"]) || 0;
+    let disp = Number(r["DES QTY"] || r["DISP QTY"]) || 0;
+
+    let cls = (sch === disp) ? "ok" : "bad";
+
     html+=`<tr class="${cls}">`;
     headers.forEach(h=>html+=`<td>${r[h]||"-"}</td>`);
     html+="</tr>";
@@ -247,9 +216,7 @@ function table(rows){
   return html+"</table>";
 }
 
-/* CHART */
 function createChartSlide(){
-
   let div=document.createElement("div");
   div.className="page";
 
@@ -264,7 +231,6 @@ function createChartSlide(){
   pages.push(div);
   document.getElementById("pages").appendChild(div);
 
-  /* TREND */
   let trend={};
   data.forEach(r=>{
     let d=formatDate(r["SCHEDULE DATE"]);
@@ -288,7 +254,6 @@ function createChartSlide(){
     }
   });
 
-  /* BAR */
   let grp={}, target={};
 
   data.forEach(r=>{
@@ -311,31 +276,18 @@ function createChartSlide(){
         {label:"SCH QTY",data:customers.map(c=>target[c]),backgroundColor:"#3b82f6"},
         {label:"DISP QTY",data:customers.map(c=>grp[c]),backgroundColor:"#22c55e"}
       ]
-    },
-    options:{
-      plugins:{
-        legend:{labels:{color:"white"}}
-      },
-      scales:{
-        x:{ticks:{color:"white"}},
-        y:{ticks:{color:"white"}}
-      }
-    },
-    plugins:[valueLabelPlugin]
+    }
   });
 }
 
-/* CONTROLS */
 function show(i){pages.forEach(p=>p.classList.remove("active")); if(pages[i]) pages[i].classList.add("active");}
 function nextSlide(){current=(current+1)%pages.length;show(current);}
 function prevSlide(){current=(current-1+pages.length)%pages.length;show(current);}
 function playSlide(){clearInterval(timer);timer=setInterval(nextSlide,10000);}
 function pauseSlide(){clearInterval(timer);}
 
-/* CLOCK */
 setInterval(()=>{document.getElementById("clock").innerText=new Date().toLocaleString();},1000);
 
-/* START */
 load();
 playSlide();
 
