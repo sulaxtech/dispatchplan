@@ -17,11 +17,13 @@
       gap:10px; padding:10px;
     }
 
-    .tile { padding:20px; border-radius:10px; text-align:center; }
-    .blue{background:#1e3a8a;}
-    .green{background:#065f46;}
-    .orange{background:#92400e;}
-    .red{background:#7f1d1d;}
+    .tile {
+      padding:20px;
+      border-radius:12px;
+      text-align:center;
+      background:linear-gradient(135deg,#1f2937,#111827);
+      box-shadow:0 4px 10px rgba(0,0,0,0.5);
+    }
 
     .controls { text-align:center; padding:10px; }
 
@@ -50,21 +52,23 @@
 
     @keyframes blink { 50% { opacity:0.4; } }
 
-    /* 📊 CHART LAYOUT */
     .chart-row {
       display:flex;
       gap:20px;
-      align-items:center;
     }
 
     .chart-box {
       flex:1;
-      height:180px;
+      height:220px;
+      background:#111827;
+      padding:10px;
+      border-radius:12px;
     }
 
     canvas {
       width:100% !important;
       height:100% !important;
+      image-rendering: crisp-edges;
     }
   </style>
 </head>
@@ -77,10 +81,10 @@
 </div>
 
 <div class="tiles">
-  <div class="tile blue" id="sch"></div>
-  <div class="tile green" id="disp"></div>
-  <div class="tile orange" id="pending"></div>
-  <div class="tile red" id="ach"></div>
+  <div class="tile" id="sch"></div>
+  <div class="tile" id="disp"></div>
+  <div class="tile" id="pending"></div>
+  <div class="tile" id="ach"></div>
 </div>
 
 <div class="controls">
@@ -88,7 +92,6 @@
   <button onclick="pauseSlide()">⏸</button>
   <button onclick="playSlide()">▶</button>
   <button onclick="nextSlide()">⏭</button>
-
   📅 <input type="date" id="datePicker" onchange="applyDateFilter()">
 </div>
 
@@ -96,13 +99,44 @@
 
 <script>
 
+/* 🔥 FIX BLUR */
+Chart.defaults.devicePixelRatio = window.devicePixelRatio || 2;
+
+/* 🎯 VALUE LABEL PLUGIN */
+const valueLabelPlugin = {
+  id: 'valueLabel',
+  afterDatasetsDraw(chart) {
+    const {ctx} = chart;
+    ctx.save();
+
+    chart.data.labels.forEach((label, i) => {
+      let dispMeta = chart.getDatasetMeta(1);
+      let disp = chart.data.datasets[1].data[i];
+      let sch = chart.data.datasets[0].data[i];
+
+      let percent = sch ? ((disp / sch) * 100).toFixed(0) : 0;
+
+      let x = dispMeta.data[i].x;
+      let y = dispMeta.data[i].y;
+
+      ctx.fillStyle = percent >= 100 ? "#22c55e" : "#ef4444";
+      ctx.font = "bold 12px Arial";
+      ctx.textAlign = "center";
+
+      ctx.fillText(percent + "%", x, y - 10);
+    });
+
+    ctx.restore();
+  }
+};
+
 const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JFJP5dxHBSQ8-4m45W47nxwwLUBDs1INcHO6jswUCnk3kp57AP3tQq19qccF/pub?output=csv";
 
 let data=[], filtered=[], headers=[];
 let pages=[], current=0, timer;
 let trendChart, barChart;
 
-// CSV parser
+/* CSV */
 function parseCSV(text){
   const rows=[]; let row=[],val='',q=false;
   for(let c of text){
@@ -122,14 +156,14 @@ function parseCSV(text){
   });
 }
 
-// Date format
+/* DATE */
 function formatDate(d){
   let date=new Date(d);
   if(isNaN(date)) return (d||"").replace(/-/g,'/');
   return `${String(date.getDate()).padStart(2,'0')}/${String(date.getMonth()+1).padStart(2,'0')}/${date.getFullYear()}`;
 }
 
-// Load
+/* LOAD */
 function load(){
   fetch(url).then(r=>r.text()).then(t=>{
     data=parseCSV(t);
@@ -137,13 +171,12 @@ function load(){
   });
 }
 
-// Date filter
+/* FILTER */
 function applyDateFilter(){
   let val=document.getElementById("datePicker").value;
 
-  if(!val){
-    filtered=data;
-  }else{
+  if(!val) filtered=data;
+  else{
     let sel=formatDate(val);
     filtered=data.filter(r=>formatDate(r["SCHEDULE DATE"])===sel);
   }
@@ -151,7 +184,7 @@ function applyDateFilter(){
   build();
 }
 
-// Build
+/* BUILD */
 function build(){
   document.getElementById("pages").innerHTML="";
   pages=[];
@@ -163,7 +196,7 @@ function build(){
   show(0);
 }
 
-// KPI
+/* KPI */
 function updateTiles(){
   let sch=0,disp=0;
 
@@ -179,7 +212,7 @@ function updateTiles(){
     "Ach %: "+(sch?((disp/sch)*100).toFixed(1):0)+"%";
 }
 
-// Customer slides
+/* SLIDES */
 function createSlides(){
   let group={};
 
@@ -198,7 +231,7 @@ function createSlides(){
   }
 }
 
-// Table
+/* TABLE */
 function table(rows){
   let html="<table><tr>";
   headers.forEach(h=>html+=`<th>${h}</th>`);
@@ -214,14 +247,14 @@ function table(rows){
   return html+"</table>";
 }
 
-// 📊 FINAL SLIDE (TREND + BAR)
+/* CHART */
 function createChartSlide(){
 
   let div=document.createElement("div");
   div.className="page";
 
   div.innerHTML=`
-    <h2>📊 Overall Analysis</h2>
+    <h2 style="text-align:center;">📊 Overall Analysis</h2>
     <div class="chart-row">
       <div class="chart-box"><canvas id="trendChart"></canvas></div>
       <div class="chart-box"><canvas id="barChart"></canvas></div>
@@ -231,7 +264,7 @@ function createChartSlide(){
   pages.push(div);
   document.getElementById("pages").appendChild(div);
 
-  // TREND DATA
+  /* TREND */
   let trend={};
   data.forEach(r=>{
     let d=formatDate(r["SCHEDULE DATE"]);
@@ -239,45 +272,70 @@ function createChartSlide(){
     trend[day]=(trend[day]||0)+(+r["DISP QTY"]||0);
   });
 
-  let labels=Object.keys(trend).sort((a,b)=>a-b);
-  let values=labels.map(d=>trend[d]);
-
   if(trendChart) trendChart.destroy();
+
   trendChart=new Chart(document.getElementById("trendChart"),{
     type:'line',
-    data:{labels:labels,datasets:[{data:values,tension:0.3}]},
-    options:{plugins:{legend:{display:false}}}
+    data:{
+      labels:Object.keys(trend),
+      datasets:[{
+        data:Object.values(trend),
+        borderColor:"#22c55e",
+        backgroundColor:"rgba(34,197,94,0.2)",
+        fill:true,
+        tension:0.4
+      }]
+    }
   });
 
-  // BAR DATA (customer wise)
-  let grp={};
+  /* BAR */
+  let grp={}, target={};
+
   data.forEach(r=>{
     let c=r["CUSTOMER"];
     grp[c]=(grp[c]||0)+(+r["DISP QTY"]||0);
+    target[c]=(target[c]||0)+(+r["SCH QTY"]||0);
   });
 
+  let customers = Object.keys(target)
+    .sort((a,b)=>target[b]-target[a])
+    .slice(0,6);
+
   if(barChart) barChart.destroy();
+
   barChart=new Chart(document.getElementById("barChart"),{
     type:'bar',
     data:{
-      labels:Object.keys(grp),
-      datasets:[{data:Object.values(grp)}]
+      labels:customers,
+      datasets:[
+        {label:"SCH QTY",data:customers.map(c=>target[c]),backgroundColor:"#3b82f6"},
+        {label:"DISP QTY",data:customers.map(c=>grp[c]),backgroundColor:"#22c55e"}
+      ]
     },
-    options:{plugins:{legend:{display:false}}}
+    options:{
+      plugins:{
+        legend:{labels:{color:"white"}}
+      },
+      scales:{
+        x:{ticks:{color:"white"}},
+        y:{ticks:{color:"white"}}
+      }
+    },
+    plugins:[valueLabelPlugin]
   });
 }
 
-// Controls
+/* CONTROLS */
 function show(i){pages.forEach(p=>p.classList.remove("active")); if(pages[i]) pages[i].classList.add("active");}
 function nextSlide(){current=(current+1)%pages.length;show(current);}
 function prevSlide(){current=(current-1+pages.length)%pages.length;show(current);}
-function playSlide(){clearInterval(timer);timer=setInterval(nextSlide,4000);}
+function playSlide(){clearInterval(timer);timer=setInterval(nextSlide,10000);}
 function pauseSlide(){clearInterval(timer);}
 
-// Clock
+/* CLOCK */
 setInterval(()=>{document.getElementById("clock").innerText=new Date().toLocaleString();},1000);
 
-// Start
+/* START */
 load();
 playSlide();
 
