@@ -66,10 +66,7 @@
       border-radius:12px;
     }
 
-    canvas {
-      width:100% !important;
-      height:100% !important;
-    }
+    canvas { width:100% !important; height:100% !important; }
 
     .nodata {
       text-align:center;
@@ -111,13 +108,26 @@ const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JF
 let data=[], filtered=[], headers=[];
 let pages=[], current=0, timer;
 
-// ---------- CSV ----------
+// ✅ ROBUST CSV PARSER
 function parseCSV(text){
-  const rows=text.trim().split("\n").map(r=>r.split(","));
-  headers=rows[0];
+  const rows=[];
+  let row=[],val='',insideQuote=false;
+
+  for(let c of text){
+    if(c === '"') insideQuote = !insideQuote;
+    else if(c === ',' && !insideQuote){ row.push(val); val=''; }
+    else if(c === '\n' && !insideQuote){ row.push(val); rows.push(row); row=[]; val=''; }
+    else val+=c;
+  }
+
+  if(val) row.push(val);
+  if(row.length) rows.push(row);
+
+  headers = rows[0].map(h => h.trim().toUpperCase());
+
   return rows.slice(1).map(r=>{
     let o={};
-    headers.forEach((h,i)=>o[h.trim()]=(r[i]||"").trim());
+    headers.forEach((h,i)=>o[h]=(r[i]||"").trim());
     return o;
   });
 }
@@ -133,29 +143,25 @@ function load(){
 
 // ---------- DATE FILTER ----------
 function applyDateFilter(){
-  let val = document.getElementById("datePicker").value;
+  let val=document.getElementById("datePicker").value;
 
   if(!val){
-    filtered = data;
+    filtered=data;
   } else {
-    let selected = new Date(val);
+    let selected=new Date(val);
 
-    filtered = data.filter(r=>{
-      let raw = r["SCHEDULE DATE"];
+    filtered=data.filter(r=>{
+      let raw=r["SCHEDULE DATE"];
       if(!raw) return false;
 
-      raw = raw.replace(/-/g,"/");
-      let parts = raw.split("/");
+      raw=raw.replace(/-/g,"/");
+      let p=raw.split("/");
 
-      if(parts.length !== 3) return false;
+      if(p.length!==3) return false;
 
-      let d = parseInt(parts[0]);
-      let m = parseInt(parts[1]) - 1;
-      let y = parseInt(parts[2]);
-
-      return d===selected.getDate() &&
-             m===selected.getMonth() &&
-             y===selected.getFullYear();
+      return parseInt(p[0])===selected.getDate() &&
+             parseInt(p[1])-1===selected.getMonth() &&
+             parseInt(p[2])===selected.getFullYear();
     });
   }
 
@@ -169,11 +175,9 @@ function build(){
 
   updateTiles();
 
-  if(filtered.length === 0){
-    let div=document.createElement("div");
-    div.className="page active";
-    div.innerHTML=`<div class="nodata">⚠️ No data for selected date</div>`;
-    document.getElementById("pages").appendChild(div);
+  if(filtered.length===0){
+    document.getElementById("pages").innerHTML=
+      `<div class="nodata">⚠️ No data for selected date</div>`;
     return;
   }
 
@@ -194,35 +198,26 @@ function updateTiles(){
     disp+=+(r["DES QTY"]||r["DISP QTY"])||0;
   });
 
-  document.getElementById("sch").innerText="Scheduled: "+sch;
+  sch.innerText="Scheduled: "+sch;
   document.getElementById("disp").innerText="Dispatched: "+disp;
   document.getElementById("pending").innerText="Pending: "+(sch-disp);
   document.getElementById("ach").innerText=
     "Ach %: "+(sch?((disp/sch)*100).toFixed(1):0)+"%";
 }
 
-// ---------- TABLE (UPDATED LOGIC) ----------
+// ---------- TABLE ----------
 function table(rows){
   let html="<table><tr>";
   headers.forEach(h=>html+=`<th>${h}</th>`);
   html+="</tr>";
 
   rows.forEach(r=>{
-    let sch = +r["SCH QTY"] || 0;
-    let disp = +(r["DES QTY"] || r["DISP QTY"]) || 0;
-    let remark = (r["REMARKS"] || "").toUpperCase().trim();
+    let sch=+r["SCH QTY"]||0;
+    let disp=+(r["DES QTY"]||r["DISP QTY"])||0;
+    let remark=(r["REMARKS"]||"").toUpperCase();
 
-    let cls;
-
-    if(remark === "READY" || remark === "DISPATCHED"){
-      cls = "ok";
-    }
-    else if(sch === disp){
-      cls = "ok";
-    }
-    else{
-      cls = "bad";
-    }
+    let cls = (remark==="READY" || remark==="DISPATCHED" || sch===disp)
+      ? "ok" : "bad";
 
     html+=`<tr class="${cls}">`;
     headers.forEach(h=>html+=`<td>${r[h]||"-"}</td>`);
@@ -232,7 +227,7 @@ function table(rows){
   return html+"</table>";
 }
 
-// ---------- GROUP ----------
+// ---------- SLIDES ----------
 function createSlides(){
   let group={};
 
@@ -251,20 +246,6 @@ function createSlides(){
   }
 }
 
-// ---------- CHART VALUES ----------
-function drawValues(chart){
-  const ctx=chart.ctx;
-  ctx.font="bold 12px Arial";
-  ctx.fillStyle="white";
-  ctx.textAlign="center";
-
-  chart.data.datasets.forEach((dataset,i)=>{
-    chart.getDatasetMeta(i).data.forEach((bar,index)=>{
-      ctx.fillText(dataset.data[index], bar.x, bar.y - 5);
-    });
-  });
-}
-
 // ---------- CHART ----------
 function createChartSlide(){
   let div=document.createElement("div");
@@ -273,64 +254,36 @@ function createChartSlide(){
   div.innerHTML=`
     <h2 style="text-align:center;">📊 Analysis</h2>
     <div class="chart-row">
-      <div class="chart-box"><canvas id="nonExportChart"></canvas></div>
-      <div class="chart-box"><canvas id="exportChart"></canvas></div>
+      <div class="chart-box"><canvas id="nonExport"></canvas></div>
+      <div class="chart-box"><canvas id="export"></canvas></div>
     </div>
   `;
 
   pages.push(div);
   document.getElementById("pages").appendChild(div);
 
-  let nonGrp={}, nonTarget={}, expGrp={}, expTarget={};
+  let non={},exp={};
 
   filtered.forEach(r=>{
-    let c=(r["CUSTOMER"]||"Unknown").toUpperCase();
+    let c=r["CUSTOMER"]||"Unknown";
     let sch=+r["SCH QTY"]||0;
-    let disp=+(r["DES QTY"]||r["DISP QTY"])||0;
 
-    if(c.includes("EXPORT")){
-      expGrp[c]=(expGrp[c]||0)+disp;
-      expTarget[c]=(expTarget[c]||0)+sch;
+    if(c.toUpperCase().includes("EXPORT")){
+      exp[c]=(exp[c]||0)+sch;
     } else {
-      nonGrp[c]=(nonGrp[c]||0)+disp;
-      nonTarget[c]=(nonTarget[c]||0)+sch;
+      non[c]=(non[c]||0)+sch;
     }
   });
 
-  let nonCustomers=Object.keys(nonTarget).slice(0,6);
-  let exportCustomers=Object.keys(expTarget);
-
-  new Chart(document.getElementById("nonExportChart"),{
+  new Chart(document.getElementById("nonExport"),{
     type:'bar',
-    data:{
-      labels:nonCustomers,
-      datasets:[
-        {label:"SCH",data:nonCustomers.map(c=>nonTarget[c]),backgroundColor:"#3b82f6"},
-        {label:"DISP",data:nonCustomers.map(c=>nonGrp[c]),backgroundColor:"#22c55e"}
-      ]
-    },
-    options:{
-      plugins:{title:{display:true,text:"NON-EXPORT",color:"white"}},
-      animation:{onComplete:function(){drawValues(this);}}
-    }
+    data:{labels:Object.keys(non),datasets:[{data:Object.values(non)}]}
   });
 
-  if(exportCustomers.length){
-    new Chart(document.getElementById("exportChart"),{
-      type:'bar',
-      data:{
-        labels:exportCustomers,
-        datasets:[
-          {label:"SCH",data:exportCustomers.map(c=>expTarget[c]),backgroundColor:"#6366f1"},
-          {label:"DISP",data:exportCustomers.map(c=>expGrp[c]),backgroundColor:"#10b981"}
-        ]
-      },
-      options:{
-        plugins:{title:{display:true,text:"EXPORT",color:"white"}},
-        animation:{onComplete:function(){drawValues(this);}}
-      }
-    });
-  }
+  new Chart(document.getElementById("export"),{
+    type:'bar',
+    data:{labels:Object.keys(exp),datasets:[{data:Object.values(exp)}]}
+  });
 }
 
 // ---------- SLIDES ----------
