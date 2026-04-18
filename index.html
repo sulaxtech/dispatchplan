@@ -153,11 +153,9 @@ function applyDateFilter(){
       let m = parseInt(parts[1]) - 1;
       let y = parseInt(parts[2]);
 
-      return (
-        d === selected.getDate() &&
-        m === selected.getMonth() &&
-        y === selected.getFullYear()
-      );
+      return d===selected.getDate() &&
+             m===selected.getMonth() &&
+             y===selected.getFullYear();
     });
   }
 
@@ -203,7 +201,38 @@ function updateTiles(){
     "Ach %: "+(sch?((disp/sch)*100).toFixed(1):0)+"%";
 }
 
-// ---------- TABLE ----------
+// ---------- TABLE (UPDATED LOGIC) ----------
+function table(rows){
+  let html="<table><tr>";
+  headers.forEach(h=>html+=`<th>${h}</th>`);
+  html+="</tr>";
+
+  rows.forEach(r=>{
+    let sch = +r["SCH QTY"] || 0;
+    let disp = +(r["DES QTY"] || r["DISP QTY"]) || 0;
+    let remark = (r["REMARKS"] || "").toUpperCase().trim();
+
+    let cls;
+
+    if(remark === "READY" || remark === "DISPATCHED"){
+      cls = "ok";
+    }
+    else if(sch === disp){
+      cls = "ok";
+    }
+    else{
+      cls = "bad";
+    }
+
+    html+=`<tr class="${cls}">`;
+    headers.forEach(h=>html+=`<td>${r[h]||"-"}</td>`);
+    html+="</tr>";
+  });
+
+  return html+"</table>";
+}
+
+// ---------- GROUP ----------
 function createSlides(){
   let group={};
 
@@ -222,25 +251,7 @@ function createSlides(){
   }
 }
 
-function table(rows){
-  let html="<table><tr>";
-  headers.forEach(h=>html+=`<th>${h}</th>`);
-  html+="</tr>";
-
-  rows.forEach(r=>{
-    let sch=+r["SCH QTY"]||0;
-    let disp=+(r["DES QTY"]||r["DISP QTY"])||0;
-    let cls=(sch===disp)?"ok":"bad";
-
-    html+=`<tr class="${cls}">`;
-    headers.forEach(h=>html+=`<td>${r[h]||"-"}</td>`);
-    html+="</tr>";
-  });
-
-  return html+"</table>";
-}
-
-// ---------- DRAW VALUES ----------
+// ---------- CHART VALUES ----------
 function drawValues(chart){
   const ctx=chart.ctx;
   ctx.font="bold 12px Arial";
@@ -256,7 +267,6 @@ function drawValues(chart){
 
 // ---------- CHART ----------
 function createChartSlide(){
-
   let div=document.createElement("div");
   div.className="page";
 
@@ -290,7 +300,6 @@ function createChartSlide(){
   let nonCustomers=Object.keys(nonTarget).slice(0,6);
   let exportCustomers=Object.keys(expTarget);
 
-  // NON EXPORT
   new Chart(document.getElementById("nonExportChart"),{
     type:'bar',
     data:{
@@ -301,16 +310,11 @@ function createChartSlide(){
       ]
     },
     options:{
-      plugins:{
-        legend:{labels:{color:"white"}},
-        title:{display:true,text:"NON-EXPORT CUSTOMERS",color:"white"}
-      },
-      scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}},
+      plugins:{title:{display:true,text:"NON-EXPORT",color:"white"}},
       animation:{onComplete:function(){drawValues(this);}}
     }
   });
 
-  // EXPORT
   if(exportCustomers.length){
     new Chart(document.getElementById("exportChart"),{
       type:'bar',
@@ -322,11 +326,7 @@ function createChartSlide(){
         ]
       },
       options:{
-        plugins:{
-          legend:{labels:{color:"white"}},
-          title:{display:true,text:"EXPORT CUSTOMERS",color:"white"}
-        },
-        scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}},
+        plugins:{title:{display:true,text:"EXPORT",color:"white"}},
         animation:{onComplete:function(){drawValues(this);}}
       }
     });
