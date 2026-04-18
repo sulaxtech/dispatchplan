@@ -110,7 +110,6 @@ const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JF
 
 let data=[], filtered=[], headers=[];
 let pages=[], current=0, timer;
-let barChart, exportChart;
 
 // ---------- CSV ----------
 function parseCSV(text){
@@ -132,19 +131,14 @@ function load(){
   });
 }
 
-// ---------- DATE FILTER (ROBUST) ----------
+// ---------- DATE FILTER ----------
 function applyDateFilter(){
   let val = document.getElementById("datePicker").value;
 
   if(!val){
     filtered = data;
   } else {
-
     let selected = new Date(val);
-
-    let d = selected.getDate();
-    let m = selected.getMonth();
-    let y = selected.getFullYear();
 
     filtered = data.filter(r=>{
       let raw = r["SCHEDULE DATE"];
@@ -155,11 +149,15 @@ function applyDateFilter(){
 
       if(parts.length !== 3) return false;
 
-      let rd = parseInt(parts[0]);
-      let rm = parseInt(parts[1]) - 1;
-      let ry = parseInt(parts[2]);
+      let d = parseInt(parts[0]);
+      let m = parseInt(parts[1]) - 1;
+      let y = parseInt(parts[2]);
 
-      return rd === d && rm === m && ry === y;
+      return (
+        d === selected.getDate() &&
+        m === selected.getMonth() &&
+        y === selected.getFullYear()
+      );
     });
   }
 
@@ -242,7 +240,7 @@ function table(rows){
   return html+"</table>";
 }
 
-// ---------- VALUES ----------
+// ---------- DRAW VALUES ----------
 function drawValues(chart){
   const ctx=chart.ctx;
   ctx.font="bold 12px Arial";
@@ -258,13 +256,14 @@ function drawValues(chart){
 
 // ---------- CHART ----------
 function createChartSlide(){
+
   let div=document.createElement("div");
   div.className="page";
 
   div.innerHTML=`
     <h2 style="text-align:center;">📊 Analysis</h2>
     <div class="chart-row">
-      <div class="chart-box"><canvas id="barChart"></canvas></div>
+      <div class="chart-box"><canvas id="nonExportChart"></canvas></div>
       <div class="chart-box"><canvas id="exportChart"></canvas></div>
     </div>
   `;
@@ -272,55 +271,63 @@ function createChartSlide(){
   pages.push(div);
   document.getElementById("pages").appendChild(div);
 
-  let grp={}, target={}, egrp={}, etarget={};
+  let nonGrp={}, nonTarget={}, expGrp={}, expTarget={};
 
   filtered.forEach(r=>{
-    let c=r["CUSTOMER"]||"Unknown";
+    let c=(r["CUSTOMER"]||"Unknown").toUpperCase();
     let sch=+r["SCH QTY"]||0;
     let disp=+(r["DES QTY"]||r["DISP QTY"])||0;
 
-    grp[c]=(grp[c]||0)+disp;
-    target[c]=(target[c]||0)+sch;
-
-    if(c.toUpperCase().includes("EXPORT")){
-      egrp[c]=(egrp[c]||0)+disp;
-      etarget[c]=(etarget[c]||0)+sch;
+    if(c.includes("EXPORT")){
+      expGrp[c]=(expGrp[c]||0)+disp;
+      expTarget[c]=(expTarget[c]||0)+sch;
+    } else {
+      nonGrp[c]=(nonGrp[c]||0)+disp;
+      nonTarget[c]=(nonTarget[c]||0)+sch;
     }
   });
 
-  let customers=Object.keys(target).slice(0,6);
-  let exportCustomers=Object.keys(etarget);
+  let nonCustomers=Object.keys(nonTarget).slice(0,6);
+  let exportCustomers=Object.keys(expTarget);
 
-  barChart=new Chart(document.getElementById("barChart"),{
+  // NON EXPORT
+  new Chart(document.getElementById("nonExportChart"),{
     type:'bar',
     data:{
-      labels:customers,
+      labels:nonCustomers,
       datasets:[
-        {label:"SCH",data:customers.map(c=>target[c]),backgroundColor:"#3b82f6"},
-        {label:"DISP",data:customers.map(c=>grp[c]),backgroundColor:"#22c55e"}
+        {label:"SCH",data:nonCustomers.map(c=>nonTarget[c]),backgroundColor:"#3b82f6"},
+        {label:"DISP",data:nonCustomers.map(c=>nonGrp[c]),backgroundColor:"#22c55e"}
       ]
     },
     options:{
-      animation:{onComplete:function(){drawValues(this);}},
-      plugins:{legend:{labels:{color:"white"}}},
-      scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}}
+      plugins:{
+        legend:{labels:{color:"white"}},
+        title:{display:true,text:"NON-EXPORT CUSTOMERS",color:"white"}
+      },
+      scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}},
+      animation:{onComplete:function(){drawValues(this);}}
     }
   });
 
+  // EXPORT
   if(exportCustomers.length){
-    exportChart=new Chart(document.getElementById("exportChart"),{
+    new Chart(document.getElementById("exportChart"),{
       type:'bar',
       data:{
         labels:exportCustomers,
         datasets:[
-          {label:"SCH",data:exportCustomers.map(c=>etarget[c]),backgroundColor:"#6366f1"},
-          {label:"DISP",data:exportCustomers.map(c=>egrp[c]),backgroundColor:"#10b981"}
+          {label:"SCH",data:exportCustomers.map(c=>expTarget[c]),backgroundColor:"#6366f1"},
+          {label:"DISP",data:exportCustomers.map(c=>expGrp[c]),backgroundColor:"#10b981"}
         ]
       },
       options:{
-        animation:{onComplete:function(){drawValues(this);}},
-        plugins:{legend:{labels:{color:"white"}}},
-        scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}}
+        plugins:{
+          legend:{labels:{color:"white"}},
+          title:{display:true,text:"EXPORT CUSTOMERS",color:"white"}
+        },
+        scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}},
+        animation:{onComplete:function(){drawValues(this);}}
       }
     });
   }
