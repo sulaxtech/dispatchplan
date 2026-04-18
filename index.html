@@ -108,7 +108,7 @@ const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JF
 let data=[], filtered=[], headers=[];
 let pages=[], current=0, timer;
 
-// ✅ ROBUST CSV PARSER
+// ---------- CSV PARSER ----------
 function parseCSV(text){
   const rows=[];
   let row=[],val='',insideQuote=false;
@@ -198,7 +198,7 @@ function updateTiles(){
     disp+=+(r["DES QTY"]||r["DISP QTY"])||0;
   });
 
-  sch.innerText="Scheduled: "+sch;
+  document.getElementById("sch").innerText="Scheduled: "+sch;
   document.getElementById("disp").innerText="Dispatched: "+disp;
   document.getElementById("pending").innerText="Pending: "+(sch-disp);
   document.getElementById("ach").innerText=
@@ -246,44 +246,91 @@ function createSlides(){
   }
 }
 
+// ---------- DRAW VALUES ----------
+function drawValues(chart){
+  const ctx=chart.ctx;
+  ctx.font="bold 12px Arial";
+  ctx.fillStyle="white";
+  ctx.textAlign="center";
+
+  chart.data.datasets.forEach((dataset,i)=>{
+    chart.getDatasetMeta(i).data.forEach((bar,index)=>{
+      ctx.fillText(dataset.data[index], bar.x, bar.y - 5);
+    });
+  });
+}
+
 // ---------- CHART ----------
 function createChartSlide(){
+
   let div=document.createElement("div");
   div.className="page";
 
   div.innerHTML=`
     <h2 style="text-align:center;">📊 Analysis</h2>
     <div class="chart-row">
-      <div class="chart-box"><canvas id="nonExport"></canvas></div>
-      <div class="chart-box"><canvas id="export"></canvas></div>
+      <div class="chart-box"><canvas id="nonExportChart"></canvas></div>
+      <div class="chart-box"><canvas id="exportChart"></canvas></div>
     </div>
   `;
 
   pages.push(div);
   document.getElementById("pages").appendChild(div);
 
-  let non={},exp={};
+  let nonGrp={}, nonTarget={}, expGrp={}, expTarget={};
 
   filtered.forEach(r=>{
-    let c=r["CUSTOMER"]||"Unknown";
-    let sch=+r["SCH QTY"]||0;
+    let customer = r["CUSTOMER"] || "Unknown";
+    let key = customer.toUpperCase();
 
-    if(c.toUpperCase().includes("EXPORT")){
-      exp[c]=(exp[c]||0)+sch;
+    let sch = Number(r["SCH QTY"]) || 0;
+    let disp = Number(r["DES QTY"] || r["DISP QTY"]) || 0;
+
+    if(key.includes("EXPORT")){
+      expGrp[customer] = (expGrp[customer] || 0) + disp;
+      expTarget[customer] = (expTarget[customer] || 0) + sch;
     } else {
-      non[c]=(non[c]||0)+sch;
+      nonGrp[customer] = (nonGrp[customer] || 0) + disp;
+      nonTarget[customer] = (nonTarget[customer] || 0) + sch;
     }
   });
 
-  new Chart(document.getElementById("nonExport"),{
+  let nonCustomers = Object.keys(nonTarget);
+  let exportCustomers = Object.keys(expTarget);
+
+  new Chart(document.getElementById("nonExportChart"),{
     type:'bar',
-    data:{labels:Object.keys(non),datasets:[{data:Object.values(non)}]}
+    data:{
+      labels: nonCustomers,
+      datasets:[
+        {label:"SCH",data: nonCustomers.map(c=>nonTarget[c]||0),backgroundColor:"#3b82f6"},
+        {label:"DISP",data: nonCustomers.map(c=>nonGrp[c]||0),backgroundColor:"#22c55e"}
+      ]
+    },
+    options:{
+      plugins:{title:{display:true,text:"NON-EXPORT CUSTOMERS",color:"white"}},
+      scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}},
+      animation:{onComplete:function(){drawValues(this);}}
+    }
   });
 
-  new Chart(document.getElementById("export"),{
-    type:'bar',
-    data:{labels:Object.keys(exp),datasets:[{data:Object.values(exp)}]}
-  });
+  if(exportCustomers.length){
+    new Chart(document.getElementById("exportChart"),{
+      type:'bar',
+      data:{
+        labels: exportCustomers,
+        datasets:[
+          {label:"SCH",data: exportCustomers.map(c=>expTarget[c]||0),backgroundColor:"#6366f1"},
+          {label:"DISP",data: exportCustomers.map(c=>expGrp[c]||0),backgroundColor:"#10b981"}
+        ]
+      },
+      options:{
+        plugins:{title:{display:true,text:"EXPORT CUSTOMERS",color:"white"}},
+        scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}},
+        animation:{onComplete:function(){drawValues(this);}}
+      }
+    });
+  }
 }
 
 // ---------- SLIDES ----------
