@@ -105,7 +105,7 @@ let data=[], filtered=[], headers=[];
 let pages=[], current=0, timer;
 let barChart, exportChart;
 
-// ---------- CSV PARSE ----------
+// ---------- CSV ----------
 function parseCSV(text){
   const rows=text.trim().split("\n").map(r=>r.split(","));
   headers=rows[0];
@@ -116,14 +116,23 @@ function parseCSV(text){
   });
 }
 
-// ---------- DATE FIX ----------
+// ---------- DATE NORMALIZE ----------
 function formatDate(d){
   if(!d) return "";
 
-  if(d.includes("/")) return d.trim();
+  d = d.replace(/-/g,"/");
 
-  let date=new Date(d);
-  if(isNaN(date)) return d;
+  let parts = d.split("/");
+
+  if(parts.length === 3){
+    let day = parts[0].padStart(2,'0');
+    let month = parts[1].padStart(2,'0');
+    let year = parts[2];
+    return `${day}/${month}/${year}`;
+  }
+
+  let date = new Date(d);
+  if(isNaN(date)) return "";
 
   return `${String(date.getDate()).padStart(2,'0')}/${
     String(date.getMonth()+1).padStart(2,'0')
@@ -147,11 +156,11 @@ function applyDateFilter(){
     filtered=data;
   } else {
     let sel=formatDate(val);
-    filtered=data.filter(r=>formatDate(r["SCHEDULE DATE"])===sel);
-  }
 
-  if(filtered.length===0){
-    filtered=data; // fallback
+    filtered=data.filter(r=>{
+      let sheetDate=formatDate(r["SCHEDULE DATE"]);
+      return sheetDate === sel;
+    });
   }
 
   build();
@@ -168,8 +177,7 @@ function build(){
 
   current=0;
   show(current);
-
-  playSlide(); // 🔥 FIX
+  playSlide();
 }
 
 // ---------- TILES ----------
@@ -225,7 +233,7 @@ function table(rows){
   return html+"</table>";
 }
 
-// ---------- CHART VALUE DRAW ----------
+// ---------- VALUE DRAW ----------
 function drawValues(chart){
   const ctx=chart.ctx;
   ctx.font="bold 12px Arial";
@@ -287,10 +295,7 @@ function createChartSlide(){
     },
     options:{
       plugins:{legend:{labels:{color:"white"}}},
-      scales:{
-        x:{ticks:{color:"white"}},
-        y:{ticks:{color:"white"}}
-      },
+      scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}},
       animation:{onComplete:function(){drawValues(this);}}
     }
   });
@@ -309,17 +314,14 @@ function createChartSlide(){
       },
       options:{
         plugins:{legend:{labels:{color:"white"}}},
-        scales:{
-          x:{ticks:{color:"white"}},
-          y:{ticks:{color:"white"}}
-        },
+        scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}},
         animation:{onComplete:function(){drawValues(this);}}
       }
     });
   }
 }
 
-// ---------- SLIDE ----------
+// ---------- SLIDES ----------
 function show(i){
   pages.forEach(p=>p.classList.remove("active"));
   if(pages[i]) pages[i].classList.add("active");
