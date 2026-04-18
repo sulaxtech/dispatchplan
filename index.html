@@ -70,6 +70,13 @@
       width:100% !important;
       height:100% !important;
     }
+
+    .nodata {
+      text-align:center;
+      font-size:22px;
+      padding:40px;
+      color:#f87171;
+    }
   </style>
 </head>
 
@@ -116,29 +123,6 @@ function parseCSV(text){
   });
 }
 
-// ---------- DATE NORMALIZE ----------
-function formatDate(d){
-  if(!d) return "";
-
-  d = d.replace(/-/g,"/");
-
-  let parts = d.split("/");
-
-  if(parts.length === 3){
-    let day = parts[0].padStart(2,'0');
-    let month = parts[1].padStart(2,'0');
-    let year = parts[2];
-    return `${day}/${month}/${year}`;
-  }
-
-  let date = new Date(d);
-  if(isNaN(date)) return "";
-
-  return `${String(date.getDate()).padStart(2,'0')}/${
-    String(date.getMonth()+1).padStart(2,'0')
-  }/${date.getFullYear()}`;
-}
-
 // ---------- LOAD ----------
 function load(){
   fetch(url).then(r=>r.text()).then(t=>{
@@ -148,18 +132,34 @@ function load(){
   });
 }
 
-// ---------- FILTER ----------
+// ---------- DATE FILTER (ROBUST) ----------
 function applyDateFilter(){
-  let val=document.getElementById("datePicker").value;
+  let val = document.getElementById("datePicker").value;
 
   if(!val){
-    filtered=data;
+    filtered = data;
   } else {
-    let sel=formatDate(val);
 
-    filtered=data.filter(r=>{
-      let sheetDate=formatDate(r["SCHEDULE DATE"]);
-      return sheetDate === sel;
+    let selected = new Date(val);
+
+    let d = selected.getDate();
+    let m = selected.getMonth();
+    let y = selected.getFullYear();
+
+    filtered = data.filter(r=>{
+      let raw = r["SCHEDULE DATE"];
+      if(!raw) return false;
+
+      raw = raw.replace(/-/g,"/");
+      let parts = raw.split("/");
+
+      if(parts.length !== 3) return false;
+
+      let rd = parseInt(parts[0]);
+      let rm = parseInt(parts[1]) - 1;
+      let ry = parseInt(parts[2]);
+
+      return rd === d && rm === m && ry === y;
     });
   }
 
@@ -172,6 +172,15 @@ function build(){
   pages=[];
 
   updateTiles();
+
+  if(filtered.length === 0){
+    let div=document.createElement("div");
+    div.className="page active";
+    div.innerHTML=`<div class="nodata">⚠️ No data for selected date</div>`;
+    document.getElementById("pages").appendChild(div);
+    return;
+  }
+
   createSlides();
   createChartSlide();
 
@@ -233,7 +242,7 @@ function table(rows){
   return html+"</table>";
 }
 
-// ---------- VALUE DRAW ----------
+// ---------- VALUES ----------
 function drawValues(chart){
   const ctx=chart.ctx;
   ctx.font="bold 12px Arial";
@@ -282,8 +291,6 @@ function createChartSlide(){
   let customers=Object.keys(target).slice(0,6);
   let exportCustomers=Object.keys(etarget);
 
-  if(barChart) barChart.destroy();
-
   barChart=new Chart(document.getElementById("barChart"),{
     type:'bar',
     data:{
@@ -294,15 +301,13 @@ function createChartSlide(){
       ]
     },
     options:{
+      animation:{onComplete:function(){drawValues(this);}},
       plugins:{legend:{labels:{color:"white"}}},
-      scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}},
-      animation:{onComplete:function(){drawValues(this);}}
+      scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}}
     }
   });
 
   if(exportCustomers.length){
-    if(exportChart) exportChart.destroy();
-
     exportChart=new Chart(document.getElementById("exportChart"),{
       type:'bar',
       data:{
@@ -313,9 +318,9 @@ function createChartSlide(){
         ]
       },
       options:{
+        animation:{onComplete:function(){drawValues(this);}},
         plugins:{legend:{labels:{color:"white"}}},
-        scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}},
-        animation:{onComplete:function(){drawValues(this);}}
+        scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}}
       }
     });
   }
