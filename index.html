@@ -105,40 +105,59 @@ let data=[], filtered=[], headers=[];
 let pages=[], current=0, timer;
 let barChart, exportChart;
 
+// ---------- CSV PARSE ----------
 function parseCSV(text){
-  const rows=text.split("\n").map(r=>r.split(","));
+  const rows=text.trim().split("\n").map(r=>r.split(","));
   headers=rows[0];
   return rows.slice(1).map(r=>{
-    let o={}; headers.forEach((h,i)=>o[h.trim()]=(r[i]||"").trim());
+    let o={};
+    headers.forEach((h,i)=>o[h.trim()]=(r[i]||"").trim());
     return o;
   });
 }
 
+// ---------- DATE FIX ----------
 function formatDate(d){
+  if(!d) return "";
+
+  if(d.includes("/")) return d.trim();
+
   let date=new Date(d);
   if(isNaN(date)) return d;
-  return `${date.getDate()}/${date.getMonth()+1}/${date.getFullYear()}`;
+
+  return `${String(date.getDate()).padStart(2,'0')}/${
+    String(date.getMonth()+1).padStart(2,'0')
+  }/${date.getFullYear()}`;
 }
 
+// ---------- LOAD ----------
 function load(){
   fetch(url).then(r=>r.text()).then(t=>{
     data=parseCSV(t);
-    applyDateFilter();
+    filtered=data;
+    build();
   });
 }
 
+// ---------- FILTER ----------
 function applyDateFilter(){
   let val=document.getElementById("datePicker").value;
 
-  if(!val) filtered=data;
-  else{
+  if(!val){
+    filtered=data;
+  } else {
     let sel=formatDate(val);
     filtered=data.filter(r=>formatDate(r["SCHEDULE DATE"])===sel);
+  }
+
+  if(filtered.length===0){
+    filtered=data; // fallback
   }
 
   build();
 }
 
+// ---------- BUILD ----------
 function build(){
   document.getElementById("pages").innerHTML="";
   pages=[];
@@ -147,9 +166,13 @@ function build(){
   createSlides();
   createChartSlide();
 
-  show(0);
+  current=0;
+  show(current);
+
+  playSlide(); // 🔥 FIX
 }
 
+// ---------- TILES ----------
 function updateTiles(){
   let sch=0,disp=0;
 
@@ -165,6 +188,7 @@ function updateTiles(){
     "Ach %: "+(sch?((disp/sch)*100).toFixed(1):0)+"%";
 }
 
+// ---------- TABLE ----------
 function createSlides(){
   let group={};
 
@@ -201,6 +225,7 @@ function table(rows){
   return html+"</table>";
 }
 
+// ---------- CHART VALUE DRAW ----------
 function drawValues(chart){
   const ctx=chart.ctx;
   ctx.font="bold 12px Arial";
@@ -209,11 +234,12 @@ function drawValues(chart){
 
   chart.data.datasets.forEach((dataset,i)=>{
     chart.getDatasetMeta(i).data.forEach((bar,index)=>{
-      ctx.fillText(dataset.data[index], bar.x, bar.y - 6);
+      ctx.fillText(dataset.data[index], bar.x, bar.y - 5);
     });
   });
 }
 
+// ---------- CHART ----------
 function createChartSlide(){
   let div=document.createElement("div");
   div.className="page";
@@ -250,7 +276,7 @@ function createChartSlide(){
 
   if(barChart) barChart.destroy();
 
-  barChart=new Chart(barChart=document.getElementById("barChart"),{
+  barChart=new Chart(document.getElementById("barChart"),{
     type:'bar',
     data:{
       labels:customers,
@@ -293,16 +319,24 @@ function createChartSlide(){
   }
 }
 
-function show(i){pages.forEach(p=>p.classList.remove("active")); if(pages[i]) pages[i].classList.add("active");}
+// ---------- SLIDE ----------
+function show(i){
+  pages.forEach(p=>p.classList.remove("active"));
+  if(pages[i]) pages[i].classList.add("active");
+}
+
 function nextSlide(){current=(current+1)%pages.length;show(current);}
 function prevSlide(){current=(current-1+pages.length)%pages.length;show(current);}
-function playSlide(){clearInterval(timer);timer=setInterval(nextSlide,12000);}
+function playSlide(){clearInterval(timer);timer=setInterval(nextSlide,10000);}
 function pauseSlide(){clearInterval(timer);}
 
-setInterval(()=>{document.getElementById("clock").innerText=new Date().toLocaleString();},1000);
+// ---------- CLOCK ----------
+setInterval(()=>{
+  document.getElementById("clock").innerText=new Date().toLocaleString();
+},1000);
 
+// ---------- START ----------
 load();
-playSlide();
 
 </script>
 
