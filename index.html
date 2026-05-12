@@ -96,7 +96,11 @@
   <button onclick="pauseSlide()">⏸</button>
   <button onclick="playSlide()">▶</button>
   <button onclick="nextSlide()">⏭</button>
+
   📅 <input type="date" id="datePicker" onchange="applyDateFilter()">
+
+  <button onclick="showToday()">Today</button>
+  <button onclick="showMonthToDate()">UpToDate</button>
 </div>
 
 <div id="pages"></div>
@@ -143,14 +147,17 @@ function load(){
 
 // ---------- DATE FILTER ----------
 function applyDateFilter(){
+
   let val=document.getElementById("datePicker").value;
 
   if(!val){
     filtered=data;
   } else {
+
     let selected=new Date(val);
 
     filtered=data.filter(r=>{
+
       let raw=r["SCHEDULE DATE"];
       if(!raw) return false;
 
@@ -168,8 +175,66 @@ function applyDateFilter(){
   build();
 }
 
+// ---------- TODAY FILTER ----------
+function showToday(){
+
+  let today = new Date();
+
+  document.getElementById("datePicker").value =
+    today.toISOString().split("T")[0];
+
+  filtered = data.filter(r=>{
+
+    let raw = r["SCHEDULE DATE"];
+    if(!raw) return false;
+
+    raw = raw.replace(/-/g,"/");
+    let p = raw.split("/");
+
+    if(p.length!==3) return false;
+
+    return parseInt(p[0]) === today.getDate() &&
+           parseInt(p[1])-1 === today.getMonth() &&
+           parseInt(p[2]) === today.getFullYear();
+  });
+
+  build();
+}
+
+// ---------- MONTH TO DATE ----------
+function showMonthToDate(){
+
+  document.getElementById("datePicker").value = "";
+
+  let today = new Date();
+
+  filtered = data.filter(r=>{
+
+    let raw = r["SCHEDULE DATE"];
+    if(!raw) return false;
+
+    raw = raw.replace(/-/g,"/");
+    let p = raw.split("/");
+
+    if(p.length!==3) return false;
+
+    let rowDate = new Date(
+      parseInt(p[2]),
+      parseInt(p[1])-1,
+      parseInt(p[0])
+    );
+
+    return rowDate.getMonth() === today.getMonth() &&
+           rowDate.getFullYear() === today.getFullYear() &&
+           rowDate <= today;
+  });
+
+  build();
+}
+
 // ---------- BUILD ----------
 function build(){
+
   document.getElementById("pages").innerHTML="";
   pages=[];
 
@@ -191,6 +256,7 @@ function build(){
 
 // ---------- TILES ----------
 function updateTiles(){
+
   let sch=0,disp=0;
 
   filtered.forEach(r=>{
@@ -207,11 +273,15 @@ function updateTiles(){
 
 // ---------- TABLE ----------
 function table(rows){
+
   let html="<table><tr>";
+
   headers.forEach(h=>html+=`<th>${h}</th>`);
+
   html+="</tr>";
 
   rows.forEach(r=>{
+
     let sch=+r["SCH QTY"]||0;
     let disp=+(r["DES QTY"]||r["DISP QTY"])||0;
     let remark=(r["REMARKS"]||"").toUpperCase();
@@ -220,7 +290,9 @@ function table(rows){
       ? "ok" : "bad";
 
     html+=`<tr class="${cls}">`;
+
     headers.forEach(h=>html+=`<td>${r[h]||"-"}</td>`);
+
     html+="</tr>";
   });
 
@@ -229,33 +301,47 @@ function table(rows){
 
 // ---------- SLIDES ----------
 function createSlides(){
+
   let group={};
 
   filtered.forEach(r=>{
+
     let c=r["CUSTOMER"]||"Unknown";
+
     if(!group[c]) group[c]=[];
+
     group[c].push(r);
   });
 
   for(let c in group){
+
     let div=document.createElement("div");
+
     div.className="page";
+
     div.innerHTML=`<h2>${c}</h2>`+table(group[c]);
+
     pages.push(div);
+
     document.getElementById("pages").appendChild(div);
   }
 }
 
 // ---------- DRAW VALUES ----------
 function drawValues(chart){
+
   const ctx=chart.ctx;
+
   ctx.font="bold 12px Arial";
   ctx.fillStyle="white";
   ctx.textAlign="center";
 
   chart.data.datasets.forEach((dataset,i)=>{
+
     chart.getDatasetMeta(i).data.forEach((bar,index)=>{
+
       ctx.fillText(dataset.data[index], bar.x, bar.y - 5);
+
     });
   });
 }
@@ -264,22 +350,31 @@ function drawValues(chart){
 function createChartSlide(){
 
   let div=document.createElement("div");
+
   div.className="page";
 
   div.innerHTML=`
     <h2 style="text-align:center;">📊 Analysis</h2>
+
     <div class="chart-row">
-      <div class="chart-box"><canvas id="nonExportChart"></canvas></div>
-      <div class="chart-box"><canvas id="exportChart"></canvas></div>
+      <div class="chart-box">
+        <canvas id="nonExportChart"></canvas>
+      </div>
+
+      <div class="chart-box">
+        <canvas id="exportChart"></canvas>
+      </div>
     </div>
   `;
 
   pages.push(div);
+
   document.getElementById("pages").appendChild(div);
 
   let nonGrp={}, nonTarget={}, expGrp={}, expTarget={};
 
   filtered.forEach(r=>{
+
     let customer = r["CUSTOMER"] || "Unknown";
     let key = customer.toUpperCase();
 
@@ -287,9 +382,12 @@ function createChartSlide(){
     let disp = Number(r["DES QTY"] || r["DISP QTY"]) || 0;
 
     if(key.includes("EXPORT")){
+
       expGrp[customer] = (expGrp[customer] || 0) + disp;
       expTarget[customer] = (expTarget[customer] || 0) + sch;
+
     } else {
+
       nonGrp[customer] = (nonGrp[customer] || 0) + disp;
       nonTarget[customer] = (nonTarget[customer] || 0) + sch;
     }
@@ -299,35 +397,88 @@ function createChartSlide(){
   let exportCustomers = Object.keys(expTarget);
 
   new Chart(document.getElementById("nonExportChart"),{
+
     type:'bar',
+
     data:{
       labels: nonCustomers,
       datasets:[
-        {label:"SCH",data: nonCustomers.map(c=>nonTarget[c]||0),backgroundColor:"#3b82f6"},
-        {label:"DISP",data: nonCustomers.map(c=>nonGrp[c]||0),backgroundColor:"#22c55e"}
+        {
+          label:"SCH",
+          data: nonCustomers.map(c=>nonTarget[c]||0),
+          backgroundColor:"#3b82f6"
+        },
+        {
+          label:"DISP",
+          data: nonCustomers.map(c=>nonGrp[c]||0),
+          backgroundColor:"#22c55e"
+        }
       ]
     },
+
     options:{
-      plugins:{title:{display:true,text:"NON-EXPORT CUSTOMERS",color:"white"}},
-      scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}},
-      animation:{onComplete:function(){drawValues(this);}}
+      plugins:{
+        title:{
+          display:true,
+          text:"NON-EXPORT CUSTOMERS",
+          color:"white"
+        }
+      },
+
+      scales:{
+        x:{ticks:{color:"white"}},
+        y:{ticks:{color:"white"}}
+      },
+
+      animation:{
+        onComplete:function(){
+          drawValues(this);
+        }
+      }
     }
   });
 
   if(exportCustomers.length){
+
     new Chart(document.getElementById("exportChart"),{
+
       type:'bar',
+
       data:{
         labels: exportCustomers,
         datasets:[
-          {label:"SCH",data: exportCustomers.map(c=>expTarget[c]||0),backgroundColor:"#6366f1"},
-          {label:"DISP",data: exportCustomers.map(c=>expGrp[c]||0),backgroundColor:"#10b981"}
+          {
+            label:"SCH",
+            data: exportCustomers.map(c=>expTarget[c]||0),
+            backgroundColor:"#6366f1"
+          },
+          {
+            label:"DISP",
+            data: exportCustomers.map(c=>expGrp[c]||0),
+            backgroundColor:"#10b981"
+          }
         ]
       },
+
       options:{
-        plugins:{title:{display:true,text:"EXPORT CUSTOMERS",color:"white"}},
-        scales:{x:{ticks:{color:"white"}},y:{ticks:{color:"white"}}},
-        animation:{onComplete:function(){drawValues(this);}}
+        plugins:{
+          title:{
+            display:true,
+            text:"EXPORT CUSTOMERS",
+            color:"white"
+          }
+        },
+
+        scales:{
+          x:{ticks:{color:"white"}},
+          y:{ticks:{color:"white"}}
+        },
+
+        animation:{
+          onComplete:function(){
+            drawValues(this);
+          }
+        }
       }
     });
   }
@@ -335,18 +486,35 @@ function createChartSlide(){
 
 // ---------- SLIDES ----------
 function show(i){
+
   pages.forEach(p=>p.classList.remove("active"));
+
   if(pages[i]) pages[i].classList.add("active");
 }
 
-function nextSlide(){current=(current+1)%pages.length;show(current);}
-function prevSlide(){current=(current-1+pages.length)%pages.length;show(current);}
-function playSlide(){clearInterval(timer);timer=setInterval(nextSlide,10000);}
-function pauseSlide(){clearInterval(timer);}
+function nextSlide(){
+  current=(current+1)%pages.length;
+  show(current);
+}
+
+function prevSlide(){
+  current=(current-1+pages.length)%pages.length;
+  show(current);
+}
+
+function playSlide(){
+  clearInterval(timer);
+  timer=setInterval(nextSlide,10000);
+}
+
+function pauseSlide(){
+  clearInterval(timer);
+}
 
 // ---------- CLOCK ----------
 setInterval(()=>{
-  document.getElementById("clock").innerText=new Date().toLocaleString();
+  document.getElementById("clock").innerText=
+    new Date().toLocaleString();
 },1000);
 
 // ---------- START ----------
