@@ -5,14 +5,14 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
-    body{
+    body {
       margin:0;
       font-family:Arial;
       background:#0b0f1a;
       color:white;
     }
 
-    .header{
+    .header {
       display:flex;
       justify-content:space-between;
       padding:10px 20px;
@@ -20,14 +20,14 @@
       font-size:22px;
     }
 
-    .tiles{
+    .tiles {
       display:grid;
       grid-template-columns:repeat(4,1fr);
       gap:10px;
       padding:10px;
     }
 
-    .tile{
+    .tile {
       padding:20px;
       border-radius:12px;
       text-align:center;
@@ -35,79 +35,77 @@
       font-size:18px;
     }
 
-    .controls{
+    .controls {
       text-align:center;
       padding:10px;
     }
 
     .controls button,
-    .controls input{
+    .controls input {
       padding:8px;
       margin:5px;
       border:none;
       border-radius:6px;
     }
 
-    .page{
+    .page {
       display:none;
       padding:15px;
     }
 
-    .active{
+    .active {
       display:block;
     }
 
-    table{
+    table {
       width:100%;
       border-collapse:collapse;
       font-size:13px;
     }
 
-    th,td{
+    th,td {
       border:1px solid #374151;
       padding:6px;
       text-align:center;
     }
 
-    th{
+    th {
       background:#1f2937;
     }
 
-    .ok{
+    .ok {
       background:#065f46;
     }
 
-    .bad{
+    .bad {
       background:#7f1d1d;
       animation:blink 1s infinite;
     }
 
-    @keyframes blink{
-      50%{
-        opacity:0.4;
-      }
+    @keyframes blink {
+      50% { opacity:0.4; }
     }
 
-    .chart-row{
+    .chart-row {
       display:flex;
       gap:20px;
       margin-top:20px;
     }
 
-    .chart-box{
+    .chart-box {
       flex:1;
-      height:320px;
+      height:420px;
       background:#111827;
       padding:15px;
       border-radius:12px;
     }
 
-    canvas{
+    canvas {
       width:100% !important;
       height:100% !important;
     }
 
-    .nodata{
+    .nodata {
       text-align:center;
       font-size:22px;
       padding:40px;
@@ -211,41 +209,7 @@ function load(){
       filtered=data;
 
       build();
-    })
-    .catch(err=>{
-
-      document.getElementById("pages").innerHTML=
-      `<div class="nodata">⚠️ CSV Link Error / 404</div>`;
     });
-}
-
-// ---------- DATE CONVERT ----------
-function convertDate(raw){
-
-  if(!raw) return null;
-
-  raw = raw.trim();
-
-  if(raw.includes("/")){
-
-    let p = raw.split("/");
-
-    if(p.length===3){
-
-      return new Date(
-        parseInt(p[2]),
-        parseInt(p[1])-1,
-        parseInt(p[0])
-      );
-    }
-  }
-
-  if(raw.includes("-")){
-
-    return new Date(raw);
-  }
-
-  return null;
 }
 
 // ---------- DATE FILTER ----------
@@ -257,23 +221,27 @@ function applyDateFilter(){
 
     filtered=data;
 
-    build();
+  } else {
 
-    return;
+    let selected=new Date(val);
+
+    filtered=data.filter(r=>{
+
+      let raw=r["SCHEDULE DATE"];
+
+      if(!raw) return false;
+
+      raw=raw.replace(/-/g,"/");
+
+      let p=raw.split("/");
+
+      if(p.length!==3) return false;
+
+      return parseInt(p[0])===selected.getDate() &&
+             parseInt(p[1])-1===selected.getMonth() &&
+             parseInt(p[2])===selected.getFullYear();
+    });
   }
-
-  let selected=new Date(val);
-
-  filtered=data.filter(r=>{
-
-    let rowDate = convertDate(r["SCHEDULE DATE"]);
-
-    if(!rowDate || isNaN(rowDate)) return false;
-
-    return rowDate.getDate()===selected.getDate() &&
-           rowDate.getMonth()===selected.getMonth() &&
-           rowDate.getFullYear()===selected.getFullYear();
-  });
 
   build();
 }
@@ -281,20 +249,26 @@ function applyDateFilter(){
 // ---------- TODAY ----------
 function showToday(){
 
-  let today=new Date();
+  let today = new Date();
 
   document.getElementById("datePicker").value =
     today.toISOString().split("T")[0];
 
-  filtered=data.filter(r=>{
+  filtered = data.filter(r=>{
 
-    let rowDate = convertDate(r["SCHEDULE DATE"]);
+    let raw = r["SCHEDULE DATE"];
 
-    if(!rowDate || isNaN(rowDate)) return false;
+    if(!raw) return false;
 
-    return rowDate.getDate()===today.getDate() &&
-           rowDate.getMonth()===today.getMonth() &&
-           rowDate.getFullYear()===today.getFullYear();
+    raw = raw.replace(/-/g,"/");
+
+    let p = raw.split("/");
+
+    if(p.length!==3) return false;
+
+    return parseInt(p[0]) === today.getDate() &&
+           parseInt(p[1])-1 === today.getMonth() &&
+           parseInt(p[2]) === today.getFullYear();
   });
 
   build();
@@ -303,19 +277,27 @@ function showToday(){
 // ---------- MONTH TO DATE ----------
 function showMonthToDate(){
 
-  document.getElementById("datePicker").value="";
+  document.getElementById("datePicker").value = "";
 
   let today = new Date();
 
-  today.setHours(23,59,59,999);
-
   filtered = data.filter(r=>{
 
-    let rowDate = convertDate(r["SCHEDULE DATE"]);
+    let raw = r["SCHEDULE DATE"];
 
-    if(!rowDate || isNaN(rowDate)) return false;
+    if(!raw) return false;
 
-    rowDate.setHours(0,0,0,0);
+    raw = raw.replace(/-/g,"/");
+
+    let p = raw.split("/");
+
+    if(p.length!==3) return false;
+
+    let rowDate = new Date(
+      parseInt(p[2]),
+      parseInt(p[1])-1,
+      parseInt(p[0])
+    );
 
     return rowDate.getMonth() === today.getMonth() &&
            rowDate.getFullYear() === today.getFullYear() &&
@@ -344,7 +326,7 @@ function build(){
 
   createSlides();
 
-  createChartSlide();
+  createFinalChartSlide();
 
   current=0;
 
@@ -417,6 +399,30 @@ function table(rows){
   return html+"</table>";
 }
 
+// ---------- VALUE LABEL ----------
+function drawValues(chart){
+
+  const ctx=chart.ctx;
+
+  ctx.font="bold 12px Arial";
+
+  ctx.fillStyle="white";
+
+  ctx.textAlign="center";
+
+  chart.data.datasets.forEach((dataset,i)=>{
+
+    chart.getDatasetMeta(i).data.forEach((bar,index)=>{
+
+      ctx.fillText(
+        dataset.data[index],
+        bar.x,
+        bar.y - 5
+      );
+    });
+  });
+}
+
 // ---------- CUSTOMER SLIDES ----------
 function createSlides(){
 
@@ -437,7 +443,9 @@ function createSlides(){
 
     let dateValue = rows[0]["SCHEDULE DATE"] || "";
 
+    // =========================
     // TABLE SLIDE
+    // =========================
 
     let tableDiv=document.createElement("div");
 
@@ -464,7 +472,9 @@ function createSlides(){
 
     document.getElementById("pages").appendChild(tableDiv);
 
+    // =========================
     // GRAPH DATA
+    // =========================
 
     let totalQty = 0;
     let dispatchedQty = 0;
@@ -478,17 +488,23 @@ function createSlides(){
 
     let pendingQty = totalQty - dispatchedQty;
 
+    // =========================
     // GRAPH SLIDE
+    // =========================
 
-    let chartId = "chart_" + c.replace(/\s+/g,'_');
+    let chartId =
+      "chart_" + c.replace(/\s+/g,'_');
 
-    let chartDiv=document.createElement("div");
+    let graphDiv=document.createElement("div");
 
-    chartDiv.className="page";
+    graphDiv.className="page";
 
-    chartDiv.innerHTML=`
+    graphDiv.innerHTML=`
 
-      <h2 style="text-align:center;">
+      <h2 style="
+        text-align:center;
+        margin-bottom:20px;
+      ">
         📊 ${c} ANALYSIS
       </h2>
 
@@ -504,9 +520,13 @@ function createSlides(){
 
     `;
 
-    pages.push(chartDiv);
+    pages.push(graphDiv);
 
-    document.getElementById("pages").appendChild(chartDiv);
+    document.getElementById("pages").appendChild(graphDiv);
+
+    // =========================
+    // CREATE GRAPH
+    // =========================
 
     setTimeout(()=>{
 
@@ -542,17 +562,36 @@ function createSlides(){
 
         options:{
 
+          responsive:true,
+
           plugins:{
+
             title:{
               display:true,
               text:c + " DISPATCH STATUS",
               color:"white"
+            },
+
+            legend:{
+              labels:{
+                color:"white"
+              }
             }
           },
 
           scales:{
-            x:{ticks:{color:"white"}},
-            y:{ticks:{color:"white"}}
+
+            x:{
+              ticks:{
+                color:"white"
+              }
+            },
+
+            y:{
+              ticks:{
+                color:"white"
+              }
+            }
           },
 
           animation:{
@@ -567,32 +606,8 @@ function createSlides(){
   }
 }
 
-// ---------- DRAW VALUES ----------
-function drawValues(chart){
-
-  const ctx=chart.ctx;
-
-  ctx.font="bold 12px Arial";
-
-  ctx.fillStyle="white";
-
-  ctx.textAlign="center";
-
-  chart.data.datasets.forEach((dataset,i)=>{
-
-    chart.getDatasetMeta(i).data.forEach((bar,index)=>{
-
-      ctx.fillText(
-        dataset.data[index],
-        bar.x,
-        bar.y - 5
-      );
-    });
-  });
-}
-
 // ---------- FINAL CHART ----------
-function createChartSlide(){
+function createFinalChartSlide(){
 
   let div=document.createElement("div");
 
@@ -601,16 +616,19 @@ function createChartSlide(){
   div.innerHTML=`
 
     <h2 style="text-align:center;">
-      📊 FINAL ANALYSIS
+      📊 ALL CUSTOMER ANALYSIS
     </h2>
 
     <div class="chart-row">
 
       <div class="chart-box">
-        <canvas id="finalChart"></canvas>
+
+        <canvas id="allCustomerChart"></canvas>
+
       </div>
 
     </div>
+
   `;
 
   pages.push(div);
@@ -650,58 +668,81 @@ function createChartSlide(){
     c=>customers[c].total - customers[c].disp
   );
 
-  new Chart(document.getElementById("finalChart"),{
+  setTimeout(()=>{
 
-    type:'bar',
+    new Chart(document.getElementById("allCustomerChart"),{
 
-    data:{
+      type:'bar',
 
-      labels:labels,
+      data:{
 
-      datasets:[
+        labels:labels,
 
-        {
-          label:"TOTAL",
-          data:totalData,
-          backgroundColor:"#3b82f6"
-        },
+        datasets:[
 
-        {
-          label:"DISPATCHED",
-          data:dispData,
-          backgroundColor:"#22c55e"
-        },
+          {
+            label:"TOTAL",
+            data:totalData,
+            backgroundColor:"#3b82f6"
+          },
 
-        {
-          label:"PENDING",
-          data:pendingData,
-          backgroundColor:"#ef4444"
-        }
-      ]
-    },
+          {
+            label:"DISPATCHED",
+            data:dispData,
+            backgroundColor:"#22c55e"
+          },
 
-    options:{
-
-      plugins:{
-        title:{
-          display:true,
-          text:"ALL CUSTOMER STATUS",
-          color:"white"
-        }
+          {
+            label:"PENDING",
+            data:pendingData,
+            backgroundColor:"#ef4444"
+          }
+        ]
       },
 
-      scales:{
-        x:{ticks:{color:"white"}},
-        y:{ticks:{color:"white"}}
-      },
+      options:{
 
-      animation:{
-        onComplete:function(){
-          drawValues(this);
+        responsive:true,
+
+        plugins:{
+
+          title:{
+            display:true,
+            text:"ALL CUSTOMER STATUS",
+            color:"white"
+          },
+
+          legend:{
+            labels:{
+              color:"white"
+            }
+          }
+        },
+
+        scales:{
+
+          x:{
+            ticks:{
+              color:"white"
+            }
+          },
+
+          y:{
+            ticks:{
+              color:"white"
+            }
+          }
+        },
+
+        animation:{
+          onComplete:function(){
+            drawValues(this);
+          }
         }
       }
-    }
-  });
+    });
+
+  },100);
 }
 
 // ---------- SLIDES ----------
