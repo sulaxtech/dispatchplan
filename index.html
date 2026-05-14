@@ -209,7 +209,41 @@ function load(){
       filtered=data;
 
       build();
+    })
+    .catch(err=>{
+
+      document.getElementById("pages").innerHTML=
+      `<div class="nodata">⚠️ CSV Link Error / 404</div>`;
     });
+}
+
+// ---------- DATE FORMAT FIX ----------
+function convertDate(raw){
+
+  if(!raw) return null;
+
+  raw = raw.trim();
+
+  if(raw.includes("/")){
+
+    let p = raw.split("/");
+
+    if(p.length===3){
+
+      return new Date(
+        parseInt(p[2]),
+        parseInt(p[1])-1,
+        parseInt(p[0])
+      );
+    }
+  }
+
+  if(raw.includes("-")){
+
+    return new Date(raw);
+  }
+
+  return null;
 }
 
 // ---------- DATE FILTER ----------
@@ -221,27 +255,23 @@ function applyDateFilter(){
 
     filtered=data;
 
-  } else {
+    build();
 
-    let selected=new Date(val);
-
-    filtered=data.filter(r=>{
-
-      let raw=r["SCHEDULE DATE"];
-
-      if(!raw) return false;
-
-      raw=raw.replace(/-/g,"/");
-
-      let p=raw.split("/");
-
-      if(p.length!==3) return false;
-
-      return parseInt(p[0])===selected.getDate() &&
-             parseInt(p[1])-1===selected.getMonth() &&
-             parseInt(p[2])===selected.getFullYear();
-    });
+    return;
   }
+
+  let selected=new Date(val);
+
+  filtered=data.filter(r=>{
+
+    let rowDate = convertDate(r["SCHEDULE DATE"]);
+
+    if(!rowDate || isNaN(rowDate)) return false;
+
+    return rowDate.getDate()===selected.getDate() &&
+           rowDate.getMonth()===selected.getMonth() &&
+           rowDate.getFullYear()===selected.getFullYear();
+  });
 
   build();
 }
@@ -249,26 +279,20 @@ function applyDateFilter(){
 // ---------- TODAY ----------
 function showToday(){
 
-  let today = new Date();
+  let today=new Date();
 
   document.getElementById("datePicker").value =
     today.toISOString().split("T")[0];
 
-  filtered = data.filter(r=>{
+  filtered=data.filter(r=>{
 
-    let raw = r["SCHEDULE DATE"];
+    let rowDate = convertDate(r["SCHEDULE DATE"]);
 
-    if(!raw) return false;
+    if(!rowDate || isNaN(rowDate)) return false;
 
-    raw = raw.replace(/-/g,"/");
-
-    let p = raw.split("/");
-
-    if(p.length!==3) return false;
-
-    return parseInt(p[0]) === today.getDate() &&
-           parseInt(p[1])-1 === today.getMonth() &&
-           parseInt(p[2]) === today.getFullYear();
+    return rowDate.getDate()===today.getDate() &&
+           rowDate.getMonth()===today.getMonth() &&
+           rowDate.getFullYear()===today.getFullYear();
   });
 
   build();
@@ -277,31 +301,19 @@ function showToday(){
 // ---------- MONTH TO DATE ----------
 function showMonthToDate(){
 
-  document.getElementById("datePicker").value = "";
+  document.getElementById("datePicker").value="";
 
-  let today = new Date();
+  let today=new Date();
 
-  filtered = data.filter(r=>{
+  filtered=data.filter(r=>{
 
-    let raw = r["SCHEDULE DATE"];
+    let rowDate = convertDate(r["SCHEDULE DATE"]);
 
-    if(!raw) return false;
+    if(!rowDate || isNaN(rowDate)) return false;
 
-    raw = raw.replace(/-/g,"/");
-
-    let p = raw.split("/");
-
-    if(p.length!==3) return false;
-
-    let rowDate = new Date(
-      parseInt(p[2]),
-      parseInt(p[1])-1,
-      parseInt(p[0])
-    );
-
-    return rowDate.getMonth() === today.getMonth() &&
-           rowDate.getFullYear() === today.getFullYear() &&
-           rowDate <= today;
+    return rowDate.getMonth()===today.getMonth() &&
+           rowDate.getFullYear()===today.getFullYear() &&
+           rowDate<=today;
   });
 
   build();
@@ -419,7 +431,7 @@ function createSlides(){
 
     let dateValue = rows[0]["SCHEDULE DATE"] || "";
 
-    // CUSTOMER TABLE SLIDE
+    // TABLE SLIDE
 
     let tableDiv=document.createElement("div");
 
@@ -460,7 +472,7 @@ function createSlides(){
 
     let pendingQty = totalQty - dispatchedQty;
 
-    // CUSTOMER GRAPH SLIDE
+    // GRAPH SLIDE
 
     let chartId = "chart_" + c.replace(/\s+/g,'_');
 
@@ -489,8 +501,6 @@ function createSlides(){
     pages.push(chartDiv);
 
     document.getElementById("pages").appendChild(chartDiv);
-
-    // CREATE CHART
 
     setTimeout(()=>{
 
@@ -575,7 +585,7 @@ function drawValues(chart){
   });
 }
 
-// ---------- CHART ----------
+// ---------- FINAL CHART ----------
 function createChartSlide(){
 
   let div=document.createElement("div");
@@ -585,17 +595,13 @@ function createChartSlide(){
   div.innerHTML=`
 
     <h2 style="text-align:center;">
-      📊 Analysis
+      📊 FINAL ANALYSIS
     </h2>
 
     <div class="chart-row">
 
       <div class="chart-box">
-        <canvas id="nonExportChart"></canvas>
-      </div>
-
-      <div class="chart-box">
-        <canvas id="exportChart"></canvas>
+        <canvas id="finalChart"></canvas>
       </div>
 
     </div>
@@ -605,60 +611,65 @@ function createChartSlide(){
 
   document.getElementById("pages").appendChild(div);
 
-  let nonGrp={}, nonTarget={};
-  let expGrp={}, expTarget={};
+  let customers={};
 
   filtered.forEach(r=>{
 
-    let customer = r["CUSTOMER"] || "Unknown";
-
-    let key = customer.toUpperCase();
+    let c = r["CUSTOMER"] || "Unknown";
 
     let sch = Number(r["SCH QTY"]) || 0;
 
     let disp = Number(r["DES QTY"] || r["DISP QTY"]) || 0;
 
-    if(key.includes("EXPORT")){
+    if(!customers[c]){
 
-      expGrp[customer] =
-        (expGrp[customer] || 0) + disp;
-
-      expTarget[customer] =
-        (expTarget[customer] || 0) + sch;
-
-    } else {
-
-      nonGrp[customer] =
-        (nonGrp[customer] || 0) + disp;
-
-      nonTarget[customer] =
-        (nonTarget[customer] || 0) + sch;
+      customers[c]={
+        total:0,
+        disp:0
+      };
     }
+
+    customers[c].total += sch;
+
+    customers[c].disp += disp;
   });
 
-  let nonCustomers = Object.keys(nonTarget);
+  let labels = Object.keys(customers);
 
-  let exportCustomers = Object.keys(expTarget);
+  let totalData = labels.map(c=>customers[c].total);
 
-  new Chart(document.getElementById("nonExportChart"),{
+  let dispData = labels.map(c=>customers[c].disp);
+
+  let pendingData = labels.map(
+    c=>customers[c].total - customers[c].disp
+  );
+
+  new Chart(document.getElementById("finalChart"),{
 
     type:'bar',
 
     data:{
-      labels: nonCustomers,
+
+      labels:labels,
 
       datasets:[
 
         {
-          label:"SCH",
-          data: nonCustomers.map(c=>nonTarget[c]||0),
+          label:"TOTAL",
+          data:totalData,
           backgroundColor:"#3b82f6"
         },
 
         {
-          label:"DISP",
-          data: nonCustomers.map(c=>nonGrp[c]||0),
+          label:"DISPATCHED",
+          data:dispData,
           backgroundColor:"#22c55e"
+        },
+
+        {
+          label:"PENDING",
+          data:pendingData,
+          backgroundColor:"#ef4444"
         }
       ]
     },
@@ -668,7 +679,7 @@ function createChartSlide(){
       plugins:{
         title:{
           display:true,
-          text:"NON-EXPORT CUSTOMERS",
+          text:"ALL CUSTOMER STATUS",
           color:"white"
         }
       },
@@ -685,55 +696,6 @@ function createChartSlide(){
       }
     }
   });
-
-  if(exportCustomers.length){
-
-    new Chart(document.getElementById("exportChart"),{
-
-      type:'bar',
-
-      data:{
-        labels: exportCustomers,
-
-        datasets:[
-
-          {
-            label:"SCH",
-            data: exportCustomers.map(c=>expTarget[c]||0),
-            backgroundColor:"#6366f1"
-          },
-
-          {
-            label:"DISP",
-            data: exportCustomers.map(c=>expGrp[c]||0),
-            backgroundColor:"#10b981"
-          }
-        ]
-      },
-
-      options:{
-
-        plugins:{
-          title:{
-            display:true,
-            text:"EXPORT CUSTOMERS",
-            color:"white"
-          }
-        },
-
-        scales:{
-          x:{ticks:{color:"white"}},
-          y:{ticks:{color:"white"}}
-        },
-
-        animation:{
-          onComplete:function(){
-            drawValues(this);
-          }
-        }
-      }
-    });
-  }
 }
 
 // ---------- SLIDES ----------
