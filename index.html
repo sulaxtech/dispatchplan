@@ -5,14 +5,15 @@
   <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 
   <style>
-    body {
+
+    body{
       margin:0;
       font-family:Arial;
       background:#0b0f1a;
       color:white;
     }
 
-    .header {
+    .header{
       display:flex;
       justify-content:space-between;
       padding:10px 20px;
@@ -20,14 +21,14 @@
       font-size:22px;
     }
 
-    .tiles {
+    .tiles{
       display:grid;
       grid-template-columns:repeat(4,1fr);
       gap:10px;
       padding:10px;
     }
 
-    .tile {
+    .tile{
       padding:20px;
       border-radius:12px;
       text-align:center;
@@ -35,82 +36,85 @@
       font-size:18px;
     }
 
-    .controls {
+    .controls{
       text-align:center;
       padding:10px;
     }
 
     .controls button,
-    .controls input {
+    .controls input{
       padding:8px;
       margin:5px;
       border:none;
       border-radius:6px;
     }
 
-    .page {
+    .page{
       display:none;
       padding:15px;
     }
 
-    .active {
+    .active{
       display:block;
     }
 
-    table {
+    table{
       width:100%;
       border-collapse:collapse;
       font-size:13px;
     }
 
-    th,td {
+    th,td{
       border:1px solid #374151;
       padding:6px;
       text-align:center;
     }
 
-    th {
+    th{
       background:#1f2937;
     }
 
-    .ok {
+    .ok{
       background:#065f46;
     }
 
-    .bad {
+    .bad{
       background:#7f1d1d;
       animation:blink 1s infinite;
     }
 
-    @keyframes blink {
-      50% { opacity:0.4; }
+    @keyframes blink{
+      50%{
+        opacity:0.4;
+      }
     }
 
-    .chart-row {
+    .chart-row{
       display:flex;
       gap:20px;
       margin-top:20px;
     }
 
-    .chart-box {
+    .chart-box{
       flex:1;
-      height:320px;
+      height:420px;
       background:#111827;
       padding:15px;
       border-radius:12px;
     }
 
-    canvas {
+    canvas{
       width:100% !important;
       height:100% !important;
     }
 
-    .nodata {
+    .nodata{
       text-align:center;
       font-size:22px;
       padding:40px;
       color:#f87171;
     }
+
   </style>
 </head>
 
@@ -129,23 +133,26 @@
 </div>
 
 <div class="controls">
+
   <button onclick="prevSlide()">⏮</button>
   <button onclick="pauseSlide()">⏸</button>
   <button onclick="playSlide()">▶</button>
   <button onclick="nextSlide()">⏭</button>
 
   📅
+
   <input type="date" id="datePicker" onchange="applyDateFilter()">
 
   <button onclick="showToday()">Today</button>
   <button onclick="showMonthToDate()">UpToDate</button>
+
 </div>
 
 <div id="pages"></div>
 
 <script>
 
-const url="https://docs.google.com/spreadsheets/d/e/2PACX-1vT04b2M0n-rrLlRUMu6JFJP5dxHBSQ8-4m45W47nxwwLUBDs1INcHO6jswUCnk3kp57AP3tQq19qccF/pub?output=csv";
+const url="YOUR_CSV_LINK_HERE";
 
 let data=[], filtered=[], headers=[];
 let pages=[], current=0, timer;
@@ -159,23 +166,28 @@ function parseCSV(text){
   for(let c of text){
 
     if(c === '"'){
+
       insideQuote = !insideQuote;
     }
 
     else if(c === ',' && !insideQuote){
+
       row.push(val);
       val='';
     }
 
     else if(c === '\n' && !insideQuote){
+
       row.push(val);
       rows.push(row);
+
       row=[];
       val='';
     }
 
     else{
-      val+=c;
+
+      val += c;
     }
   }
 
@@ -190,6 +202,7 @@ function parseCSV(text){
     let o={};
 
     headers.forEach((h,i)=>{
+
       o[h]=(r[i]||"").trim();
     });
 
@@ -201,7 +214,9 @@ function parseCSV(text){
 function load(){
 
   fetch(url)
+
     .then(r=>r.text())
+
     .then(t=>{
 
       data=parseCSV(t);
@@ -220,8 +235,9 @@ function applyDateFilter(){
   if(!val){
 
     filtered=data;
+  }
 
-  } else {
+  else{
 
     let selected=new Date(val);
 
@@ -249,26 +265,26 @@ function applyDateFilter(){
 // ---------- TODAY ----------
 function showToday(){
 
-  let today = new Date();
+  let today=new Date();
 
-  document.getElementById("datePicker").value =
+  document.getElementById("datePicker").value=
     today.toISOString().split("T")[0];
 
-  filtered = data.filter(r=>{
+  filtered=data.filter(r=>{
 
-    let raw = r["SCHEDULE DATE"];
+    let raw=r["SCHEDULE DATE"];
 
     if(!raw) return false;
 
-    raw = raw.replace(/-/g,"/");
+    raw=raw.replace(/-/g,"/");
 
-    let p = raw.split("/");
+    let p=raw.split("/");
 
     if(p.length!==3) return false;
 
-    return parseInt(p[0]) === today.getDate() &&
-           parseInt(p[1])-1 === today.getMonth() &&
-           parseInt(p[2]) === today.getFullYear();
+    return parseInt(p[0])===today.getDate() &&
+           parseInt(p[1])-1===today.getMonth() &&
+           parseInt(p[2])===today.getFullYear();
   });
 
   build();
@@ -277,31 +293,31 @@ function showToday(){
 // ---------- MONTH TO DATE ----------
 function showMonthToDate(){
 
-  document.getElementById("datePicker").value = "";
+  document.getElementById("datePicker").value="";
 
-  let today = new Date();
+  let today=new Date();
 
-  filtered = data.filter(r=>{
+  filtered=data.filter(r=>{
 
-    let raw = r["SCHEDULE DATE"];
+    let raw=r["SCHEDULE DATE"];
 
     if(!raw) return false;
 
-    raw = raw.replace(/-/g,"/");
+    raw=raw.replace(/-/g,"/");
 
-    let p = raw.split("/");
+    let p=raw.split("/");
 
     if(p.length!==3) return false;
 
-    let rowDate = new Date(
+    let rowDate=new Date(
       parseInt(p[2]),
       parseInt(p[1])-1,
       parseInt(p[0])
     );
 
-    return rowDate.getMonth() === today.getMonth() &&
-           rowDate.getFullYear() === today.getFullYear() &&
-           rowDate <= today;
+    return rowDate.getMonth()===today.getMonth() &&
+           rowDate.getFullYear()===today.getFullYear() &&
+           rowDate<=today;
   });
 
   build();
@@ -319,7 +335,7 @@ function build(){
   if(filtered.length===0){
 
     document.getElementById("pages").innerHTML=
-      `<div class="nodata">⚠️ No data for selected date</div>`;
+      `<div class="nodata">⚠️ No data found</div>`;
 
     return;
   }
@@ -343,22 +359,22 @@ function updateTiles(){
 
   filtered.forEach(r=>{
 
-    sch+=+r["SCH QTY"]||0;
+    sch += +r["SCH QTY"] || 0;
 
-    disp+=+(r["DES QTY"]||r["DISP QTY"])||0;
+    disp += +(r["DES QTY"] || r["DISP QTY"]) || 0;
   });
 
   document.getElementById("sch").innerText =
-    "Scheduled: "+sch;
+    "Scheduled : " + sch;
 
   document.getElementById("disp").innerText =
-    "Dispatched: "+disp;
+    "Dispatched : " + disp;
 
   document.getElementById("pending").innerText =
-    "Pending: "+(sch-disp);
+    "Pending : " + (sch-disp);
 
   document.getElementById("ach").innerText =
-    "Ach %: "+(sch?((disp/sch)*100).toFixed(1):0)+"%";
+    "Ach % : " + (sch?((disp/sch)*100).toFixed(1):0) + "%";
 }
 
 // ---------- TABLE ----------
@@ -367,10 +383,11 @@ function table(rows){
   let html="<table><tr>";
 
   headers.forEach(h=>{
-    html+=`<th>${h}</th>`;
+
+    html += `<th>${h}</th>`;
   });
 
-  html+="</tr>";
+  html += "</tr>";
 
   rows.forEach(r=>{
 
@@ -380,23 +397,48 @@ function table(rows){
 
     let remark=(r["REMARKS"]||"").toUpperCase();
 
-    let cls =
+    let cls=
       (remark==="READY" ||
        remark==="DISPATCHED" ||
        sch===disp)
       ? "ok"
       : "bad";
 
-    html+=`<tr class="${cls}">`;
+    html += `<tr class="${cls}">`;
 
     headers.forEach(h=>{
-      html+=`<td>${r[h]||"-"}</td>`;
+
+      html += `<td>${r[h]||"-"}</td>`;
     });
 
-    html+="</tr>";
+    html += "</tr>";
   });
 
-  return html+"</table>";
+  return html + "</table>";
+}
+
+// ---------- DRAW VALUES ----------
+function drawValues(chart){
+
+  const ctx=chart.ctx;
+
+  ctx.font="bold 14px Arial";
+
+  ctx.fillStyle="white";
+
+  ctx.textAlign="center";
+
+  chart.data.datasets.forEach((dataset,i)=>{
+
+    chart.getDatasetMeta(i).data.forEach((bar,index)=>{
+
+      ctx.fillText(
+        dataset.data[index],
+        bar.x,
+        bar.y - 8
+      );
+    });
+  });
 }
 
 // ---------- CUSTOMER SLIDES ----------
@@ -415,13 +457,19 @@ function createSlides(){
 
   for(let c in group){
 
-    let div=document.createElement("div");
+    let rows = group[c];
 
-    div.className="page";
+    let dateValue = rows[0]["SCHEDULE DATE"] || "";
 
-    let dateValue = group[c][0]["SCHEDULE DATE"] || "";
+    // ======================
+    // TABLE SLIDE
+    // ======================
 
-    div.innerHTML=`
+    let tableDiv=document.createElement("div");
+
+    tableDiv.className="page";
+
+    tableDiv.innerHTML=`
 
       <div style="
         display:flex;
@@ -436,39 +484,133 @@ function createSlides(){
 
       </div>
 
-    ` + table(group[c]);
+    ` + table(rows);
 
-    pages.push(div);
+    pages.push(tableDiv);
 
-    document.getElementById("pages").appendChild(div);
+    document.getElementById("pages").appendChild(tableDiv);
+
+    // ======================
+    // GRAPH DATA
+    // ======================
+
+    let totalQty=0;
+    let dispatchedQty=0;
+
+    rows.forEach(r=>{
+
+      totalQty += Number(r["SCH QTY"]) || 0;
+
+      dispatchedQty += Number(r["DES QTY"] || r["DISP QTY"]) || 0;
+    });
+
+    let pendingQty = totalQty - dispatchedQty;
+
+    // ======================
+    // GRAPH SLIDE
+    // ======================
+
+    let chartId="chart_"+c.replace(/\s+/g,'_');
+
+    let chartDiv=document.createElement("div");
+
+    chartDiv.className="page";
+
+    chartDiv.innerHTML=`
+
+      <h2 style="text-align:center;">
+        📊 ${c} GRAPH
+      </h2>
+
+      <div class="chart-row">
+
+        <div class="chart-box">
+
+          <canvas id="${chartId}"></canvas>
+
+        </div>
+
+      </div>
+
+    `;
+
+    pages.push(chartDiv);
+
+    document.getElementById("pages").appendChild(chartDiv);
+
+    // CREATE CUSTOMER GRAPH
+
+    setTimeout(()=>{
+
+      new Chart(document.getElementById(chartId),{
+
+        type:'bar',
+
+        data:{
+
+          labels:[
+            "TOTAL QTY",
+            "DISPATCHED",
+            "PENDING"
+          ],
+
+          datasets:[{
+
+            label:c,
+
+            data:[
+              totalQty,
+              dispatchedQty,
+              pendingQty
+            ],
+
+            backgroundColor:[
+              "#3b82f6",
+              "#22c55e",
+              "#ef4444"
+            ]
+          }]
+        },
+
+        options:{
+
+          responsive:true,
+
+          plugins:{
+            title:{
+              display:true,
+              text:c + " DISPATCH STATUS",
+              color:"white"
+            },
+            legend:{
+              labels:{
+                color:"white"
+              }
+            }
+          },
+
+          scales:{
+            x:{
+              ticks:{color:"white"}
+            },
+            y:{
+              ticks:{color:"white"}
+            }
+          },
+
+          animation:{
+            onComplete:function(){
+              drawValues(this);
+            }
+          }
+        }
+      });
+
+    },100);
   }
 }
 
-// ---------- DRAW VALUES ----------
-function drawValues(chart){
-
-  const ctx=chart.ctx;
-
-  ctx.font="bold 12px Arial";
-
-  ctx.fillStyle="white";
-
-  ctx.textAlign="center";
-
-  chart.data.datasets.forEach((dataset,i)=>{
-
-    chart.getDatasetMeta(i).data.forEach((bar,index)=>{
-
-      ctx.fillText(
-        dataset.data[index],
-        bar.x,
-        bar.y - 5
-      );
-    });
-  });
-}
-
-// ---------- CHART ----------
+// ---------- OVERALL GRAPH ----------
 function createChartSlide(){
 
   let div=document.createElement("div");
@@ -478,17 +620,15 @@ function createChartSlide(){
   div.innerHTML=`
 
     <h2 style="text-align:center;">
-      📊 Analysis
+      📊 ALL CUSTOMER ANALYSIS
     </h2>
 
     <div class="chart-row">
 
       <div class="chart-box">
-        <canvas id="nonExportChart"></canvas>
-      </div>
 
-      <div class="chart-box">
-        <canvas id="exportChart"></canvas>
+        <canvas id="overallChart"></canvas>
+
       </div>
 
     </div>
@@ -498,77 +638,93 @@ function createChartSlide(){
 
   document.getElementById("pages").appendChild(div);
 
-  let nonGrp={}, nonTarget={};
-  let expGrp={}, expTarget={};
+  let customers={};
 
   filtered.forEach(r=>{
 
-    let customer = r["CUSTOMER"] || "Unknown";
+    let c=r["CUSTOMER"]||"Unknown";
 
-    let key = customer.toUpperCase();
+    let sch=Number(r["SCH QTY"])||0;
 
-    let sch = Number(r["SCH QTY"]) || 0;
+    let disp=Number(r["DES QTY"]||r["DISP QTY"])||0;
 
-    let disp = Number(r["DES QTY"] || r["DISP QTY"]) || 0;
+    if(!customers[c]){
 
-    if(key.includes("EXPORT")){
-
-      expGrp[customer] =
-        (expGrp[customer] || 0) + disp;
-
-      expTarget[customer] =
-        (expTarget[customer] || 0) + sch;
-
-    } else {
-
-      nonGrp[customer] =
-        (nonGrp[customer] || 0) + disp;
-
-      nonTarget[customer] =
-        (nonTarget[customer] || 0) + sch;
+      customers[c]={
+        sch:0,
+        disp:0
+      };
     }
+
+    customers[c].sch += sch;
+
+    customers[c].disp += disp;
   });
 
-  let nonCustomers = Object.keys(nonTarget);
+  let labels=Object.keys(customers);
 
-  let exportCustomers = Object.keys(expTarget);
+  let totalData=labels.map(c=>customers[c].sch);
 
-  new Chart(document.getElementById("nonExportChart"),{
+  let dispatchData=labels.map(c=>customers[c].disp);
+
+  let pendingData=labels.map(c=>
+    customers[c].sch - customers[c].disp
+  );
+
+  new Chart(document.getElementById("overallChart"),{
 
     type:'bar',
 
     data:{
-      labels: nonCustomers,
+
+      labels:labels,
 
       datasets:[
 
         {
-          label:"SCH",
-          data: nonCustomers.map(c=>nonTarget[c]||0),
+          label:"TOTAL",
+          data:totalData,
           backgroundColor:"#3b82f6"
         },
 
         {
-          label:"DISP",
-          data: nonCustomers.map(c=>nonGrp[c]||0),
+          label:"DISPATCHED",
+          data:dispatchData,
           backgroundColor:"#22c55e"
+        },
+
+        {
+          label:"PENDING",
+          data:pendingData,
+          backgroundColor:"#ef4444"
         }
       ]
     },
 
     options:{
 
+      responsive:true,
+
       plugins:{
         title:{
           display:true,
-          text:"NON-EXPORT CUSTOMERS",
+          text:"ALL CUSTOMER STATUS",
           color:"white"
+        },
+        legend:{
+          labels:{
+            color:"white"
+          }
         }
       },
 
       scales:{
-        x:{ticks:{color:"white"}},
-        y:{ticks:{color:"white"}}
+        x:{
+          ticks:{color:"white"}
+        },
+        y:{
+          ticks:{color:"white"}
+        }
       },
 
       animation:{
@@ -578,65 +734,18 @@ function createChartSlide(){
       }
     }
   });
-
-  if(exportCustomers.length){
-
-    new Chart(document.getElementById("exportChart"),{
-
-      type:'bar',
-
-      data:{
-        labels: exportCustomers,
-
-        datasets:[
-
-          {
-            label:"SCH",
-            data: exportCustomers.map(c=>expTarget[c]||0),
-            backgroundColor:"#6366f1"
-          },
-
-          {
-            label:"DISP",
-            data: exportCustomers.map(c=>expGrp[c]||0),
-            backgroundColor:"#10b981"
-          }
-        ]
-      },
-
-      options:{
-
-        plugins:{
-          title:{
-            display:true,
-            text:"EXPORT CUSTOMERS",
-            color:"white"
-          }
-        },
-
-        scales:{
-          x:{ticks:{color:"white"}},
-          y:{ticks:{color:"white"}}
-        },
-
-        animation:{
-          onComplete:function(){
-            drawValues(this);
-          }
-        }
-      }
-    });
-  }
 }
 
 // ---------- SLIDES ----------
 function show(i){
 
   pages.forEach(p=>{
+
     p.classList.remove("active");
   });
 
   if(pages[i]){
+
     pages[i].classList.add("active");
   }
 }
@@ -670,7 +779,7 @@ function pauseSlide(){
 // ---------- CLOCK ----------
 setInterval(()=>{
 
-  document.getElementById("clock").innerText =
+  document.getElementById("clock").innerText=
     new Date().toLocaleString();
 
 },1000);
